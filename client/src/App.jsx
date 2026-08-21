@@ -24,6 +24,29 @@ function getDeviceId() {
   return id;
 }
 
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  document.body.removeChild(ta);
+  return ok;
+}
+
+// navigator.clipboard only exists in secure contexts (HTTPS/localhost);
+// fall back to execCommand so copy works on plain HTTP too.
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text).then(() => true).catch(() => fallbackCopy(text));
+  }
+  return Promise.resolve(fallbackCopy(text));
+}
+
 function formatTime(ms) {
   const totalSec = Math.max(0, Math.ceil(ms / 1000));
   const min = Math.floor(totalSec / 60);
@@ -357,6 +380,14 @@ function WaitingRoom() {
   const canStart = state?.players.filter(p => p.connected).length >= 2;
   const isCreator = state?.createdBy === socketId;
   const canIShowStart = isCreator || state?.settings?.allowAnyoneToStart;
+  const [copyState, setCopyState] = useState('idle');
+
+  const handleCopyLink = useCallback(() => {
+    copyToClipboard(shareLink).then(ok => {
+      setCopyState(ok ? 'copied' : 'failed');
+      setTimeout(() => setCopyState('idle'), 2000);
+    });
+  }, [shareLink]);
 
   if (!state) {
     return (
@@ -378,10 +409,12 @@ function WaitingRoom() {
         <div className="room-code">{code}</div>
 
         <div className="share-section">
-          <div className="share-link" onClick={() => navigator.clipboard.writeText(shareLink)}>
+          <div className="share-link" onClick={handleCopyLink}>
             {shareLink}
             <br />
-            <small style={{ color: '#888' }}>(click to copy)</small>
+            <small style={{ color: copyState === 'copied' ? '#4ade80' : copyState === 'failed' ? '#f87171' : '#888' }}>
+              {copyState === 'copied' ? 'Copied!' : copyState === 'failed' ? 'Copy failed — select the link manually' : '(click to copy)'}
+            </small>
           </div>
           <div className="qr-code">
             <QRCodeSVG value={shareLink} size={128} bgColor="#16213e" fgColor="#eee" />
