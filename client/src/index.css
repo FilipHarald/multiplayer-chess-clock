@@ -1,0 +1,586 @@
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-card: #0f3460;
+  --accent: #e94560;
+  --text-primary: #eee;
+  --text-secondary: #aaa;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app {
+  width: 100%;
+  max-width: 500px;
+  min-height: 100vh;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Lobby / Setup ---------- */
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 40px 0;
+}
+
+.setup h1 {
+  text-align: center;
+  font-size: 1.8rem;
+  color: var(--accent);
+}
+
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.field input, .field select {
+  background: var(--bg-secondary);
+  border: 1px solid #333;
+  color: var(--text-primary);
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.field input:focus, .field select:focus {
+  border-color: var(--accent);
+}
+
+.time-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.time-input-group input {
+  flex: 1;
+  min-width: 0;
+}
+
+.time-input-group select {
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.total-time {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 4px 0;
+}
+
+.btn {
+  padding: 14px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #c73650;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid #444;
+}
+
+.btn-secondary:hover {
+  background: #1e2d50;
+}
+
+.btn-small {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #333;
+}
+
+.error {
+  color: var(--accent);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* ---------- Waiting Room ---------- */
+
+.waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 40px 0;
+  align-items: center;
+}
+
+.waiting h2 {
+  color: var(--accent);
+}
+
+.room-code {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  background: var(--bg-card);
+  padding: 16px 32px;
+  border-radius: 12px;
+  text-align: center;
+  font-family: monospace;
+}
+
+.share-link {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-align: center;
+  word-break: break-all;
+  cursor: pointer;
+}
+
+.share-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.qr-code {
+  background: var(--bg-card);
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.player-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.player-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.player-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.player-slot.connected {
+  border: 1px solid #444;
+}
+
+.player-slot.empty {
+  border: 1px dashed #333;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.player-slot input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1rem;
+  width: 100%;
+  outline: none;
+}
+
+/* ---------- Game ---------- */
+
+.game {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100vh;
+  padding: 10px 0;
+}
+
+.round-badge {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 4px 0;
+}
+
+.player-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 2px solid transparent;
+  transition: all 0.3s;
+  cursor: pointer;
+  user-select: none;
+  min-height: 80px;
+}
+
+.player-card.active {
+  border-color: var(--player-color, var(--accent));
+  box-shadow: 0 0 20px rgba(233, 69, 96, 0.2);
+}
+
+.player-card.passed {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+.player-card.winner {
+  border-color: #2ecc71;
+  box-shadow: 0 0 20px rgba(46, 204, 113, 0.3);
+}
+
+.player-card.loser {
+  border-color: var(--accent);
+  opacity: 0.5;
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.player-status {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.player-timer {
+  font-size: 2rem;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  letter-spacing: 0.02em;
+}
+
+.player-timer.low {
+  color: var(--accent);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.pass-badge {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.05);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* ---------- Actions ---------- */
+
+.game-actions {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.game-actions .btn {
+  flex: 1;
+}
+
+.btn-pass {
+  background: #444;
+  color: var(--text-primary);
+}
+
+.btn-pass:hover {
+  background: #555;
+}
+
+.btn-end-turn {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-end-turn:hover {
+  background: #c73650;
+}
+
+.btn-pass:disabled, .btn-end-turn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ---------- Game Over ---------- */
+
+.game-over {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 60px 0;
+  text-align: center;
+}
+
+.game-over h2 {
+  font-size: 1.6rem;
+}
+
+.winner-name {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.game-over-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ---------- Turn order indicator ---------- */
+
+.turn-order {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+}
+
+.turn-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.turn-dot.current {
+  transform: scale(1.4);
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* ---------- Name Bar ---------- */
+
+.name-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #333;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.name-bar-display {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.name-bar-display:hover {
+  color: var(--text-primary);
+}
+
+.name-bar-edit-hint {
+  font-size: 0.75rem;
+  color: #666;
+  margin-left: 8px;
+}
+
+.name-bar-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.name-bar-edit input {
+  background: var(--bg-secondary);
+  border: 1px solid #444;
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  outline: none;
+  width: 120px;
+}
+
+.name-bar-edit input:focus {
+  border-color: var(--accent);
+}
+
+.name-bar-uuid {
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: #555;
+  background: rgba(255,255,255,0.03);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+/* ---------- Checkboxes ---------- */
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+/* ---------- Badges ---------- */
+
+.host-badge, .me-badge {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.host-badge {
+  background: rgba(233, 69, 96, 0.2);
+  color: var(--accent);
+}
+
+.me-badge {
+  background: rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+}
+
+.player-slot-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.player-slot-name {
+  display: flex;
+  align-items: center;
+}
+
+/* ---------- Home Link ---------- */
+
+.home-link {
+  display: inline-block;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+  transition: color 0.15s;
+}
+
+.home-link:hover {
+  color: var(--text-primary);
+}
+
+/* ---------- Public Rooms ---------- */
+
+.public-rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.public-room-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.public-room-item:hover {
+  border-color: var(--accent);
+}
+
+.public-room-code {
+  font-family: monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+.public-room-players {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
