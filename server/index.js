@@ -48,6 +48,7 @@ function createRoom(playerCount, minutesPerPlayer, settings = {}) {
     phase: 'lobby',
     timerInterval: null,
     paused: false,
+    pausedBy: null,
     createdAt: Date.now(),
     createdBy: null,
     creatorName: null,
@@ -140,6 +141,7 @@ function startNextRound(code) {
   room.passOrder = [];
   room.phase = 'playing';
   room.paused = true;
+  room.pausedBy = 'round-start';
 
   startTimerTick(code);
   io.to(code).emit('new-round', { state: serializeState(room) });
@@ -167,6 +169,7 @@ function serializeState(room, forSocketId) {
     passOrder: room.passOrder,
     phase: room.phase,
     paused: room.paused,
+    pausedBy: room.pausedBy,
     createdBy: room.createdBy,
     settings: room.settings,
     myIndex: playerIdx,
@@ -284,6 +287,7 @@ io.on('connection', (socket) => {
     room.round = 1;
     room.passOrder = [];
     room.paused = false;
+    room.pausedBy = null;
 
     startTimerTick(currentRoom);
     io.to(currentRoom).emit('game-started', { state: serializeState(room) });
@@ -299,7 +303,13 @@ io.on('connection', (socket) => {
     const senderIdx = room.players.findIndex((p) => p.id === socket.id);
     if (senderIdx === -1 || !room.players[senderIdx].connected) return;
 
-    room.paused = false;
+    // A manual pause is a hard stop: no turn actions until resumed.
+    if (room.paused && room.pausedBy !== 'round-start') return;
+
+    if (room.pausedBy === 'round-start') {
+      room.paused = false;
+      room.pausedBy = null;
+    }
 
     advanceTurn(currentRoom);
   });
@@ -317,7 +327,13 @@ io.on('connection', (socket) => {
     const target = room.players[targetIdx];
     if (!target || !target.connected || room.passOrder.includes(targetIdx)) return;
 
-    room.paused = false;
+    // A manual pause is a hard stop: no turn actions until resumed.
+    if (room.paused && room.pausedBy !== 'round-start') return;
+
+    if (room.pausedBy === 'round-start') {
+      room.paused = false;
+      room.pausedBy = null;
+    }
     room.passOrder.push(targetIdx);
 
     // Remove the passer from the turn rotation; keep currentTurnIndex pointing
@@ -351,6 +367,25 @@ io.on('connection', (socket) => {
     if (!isCreator && !room.settings.allowAnyoneToStart) return;
 
     startNextRound(currentRoom);
+  });
+
+  socket.on('toggle-pause', () => {
+    if (currentRoom === null) return;
+    const room = rooms.get(currentRoom);
+    if (!room || room.phase !== 'playing') return;
+
+    // Permission: creator or allowAnyoneToPause
+    const senderIdx = room.players.findIndex((p) => p.id === socket.id);
+    if (senderIdx === -1 || !room.players[senderIdx].connected) return;
+    const isCreator = room.createdBy === socket.id;
+    if (!isCreator && !room.settings.allowAnyoneToPause) return;
+
+    // A manual pause stays until resumed explicitly; a round-start pause is
+    // lifted by the first turn action instead (see end-turn/pass below).
+    room.paused = !room.paused;
+    room.pausedBy = room.paused ? senderIdx : null;
+
+    io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
   socket.on('reset-game', ({ playerCount, minutesPerPlayer }) => {
@@ -387,6 +422,7 @@ io.on('connection', (socket) => {
     room.passOrder = [];
     room.phase = 'lobby';
     room.paused = false;
+    room.pausedBy = null;
     // Keep createdBy and settings
 
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });

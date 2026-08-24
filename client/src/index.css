@@ -257,6 +257,41 @@ body {
   padding: 4px 0;
 }
 
+.round-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.btn-pause {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
+  padding: 4px 16px;
+  font-size: 0.8rem;
+}
+
+.btn-pause:hover:not(:disabled) {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.btn-pause.btn-resume {
+  border-color: #2ecc71;
+  color: #2ecc71;
+}
+
+.btn-pause.btn-resume:hover:not(:disabled) {
+  background: rgba(46, 204, 113, 0.12);
+  color: #2ecc71;
+}
+
+.btn-pause:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .player-card {
   flex: 1;
   display: flex;

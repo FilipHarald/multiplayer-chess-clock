@@ -580,21 +580,41 @@ function GamePage() {
     setArmed({ index: i, action: 'pass' });
   }, [playerIndex, armed, pass]);
 
+  const togglePause = useCallback(() => socket.current?.emit('toggle-pause'), [socket]);
+
   if (!state) {
     return <div className="app"><NameBar onNameChange={handleNameChange} /><p style={{ textAlign: 'center', padding: '40px' }}>Connecting...</p></div>;
   }
 
   const activeIdx = state.activePlayerIndex;
+  const isCreator = state.createdBy === socketId;
+  const canIPause = isCreator || state.settings?.allowAnyoneToPause;
 
   return (
     <div className="app">
       <NameBar onNameChange={handleNameChange} />
       <div className="game">
         <a href="/" className="home-link">← Home</a>
-        <div className="round-badge">Round {state.round}</div>
+        <div className="round-header">
+          <div className="round-badge">Round {state.round}</div>
+          {state.phase === 'playing' && (
+            <button
+              className={`btn btn-pause ${state.paused ? 'btn-resume' : ''}`}
+              onClick={togglePause}
+              disabled={!canIPause}
+              title={canIPause ? undefined : 'Only the host can pause'}
+            >
+              {state.paused ? 'Resume' : 'Pause'}
+            </button>
+          )}
+        </div>
 
         {state.phase === 'playing' && state.paused && (
-          <div className="paused-banner">Clocks paused — the first turn of the round resumes them</div>
+          <div className="paused-banner">
+            {state.pausedBy === 'round-start'
+              ? 'Clocks paused — the first turn of the round resumes them'
+              : `Paused by ${state.players[state.pausedBy]?.name ?? 'host'} — press Resume to continue`}
+          </div>
         )}
 
         <div className="turn-order">
