@@ -33,6 +33,9 @@ PORT=3002 node server/index.js
 
 **Tailscale:** http://100.70.0.46:3002
 
+Agents can follow [AGENT_BROWSER_GUIDE.md](AGENT_BROWSER_GUIDE.md) to verify
+reachability, create a room through Chromium, and capture screenshots.
+
 ## Tech stack
 
 - **Backend:** Node.js, Express, Socket.IO
