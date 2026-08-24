@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { io } from 'socket.io-client';
 
@@ -95,10 +95,10 @@ function useSocket() {
   return useContext(SocketCtx);
 }
 
-// ---------- Name Bar ----------
+// ---------- App Header ----------
 
-function NameBar({ onNameChange }) {
-  const { socketId } = useSocket();
+function NameBar() {
+  const { socket, socketId } = useSocket();
   const [name, setName] = useState(() => getPlayerName());
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -109,7 +109,7 @@ function NameBar({ onNameChange }) {
     if (trimmed && trimmed !== name) {
       setName(trimmed);
       localStorage.setItem('mcc-player-name', trimmed);
-      onNameChange?.(trimmed);
+      socket.current?.emit('rename-player', { name: trimmed });
     }
     setEditing(false);
   };
@@ -146,6 +146,16 @@ function NameBar({ onNameChange }) {
         </span>
       )}
     </div>
+  );
+}
+
+function AppHeader() {
+  const location = useLocation();
+  return (
+    <header className="app-header">
+      {location.pathname !== '/' && <a href="/" className="home-link">← Home</a>}
+      <NameBar />
+    </header>
   );
 }
 
@@ -218,7 +228,6 @@ function HomePage() {
 
   return (
     <div className="app">
-      <NameBar />
       <div className="setup">
         <h1>Multiplayer Chess Clock</h1>
         <div className="setup-form">
@@ -385,12 +394,6 @@ function WaitingRoom() {
     socket.current?.emit('start-game');
   }, [socket]);
 
-  const handleNameChange = useCallback((name) => {
-    if (playerIndex !== null) {
-      socket.current?.emit('rename-player', { index: playerIndex, name });
-    }
-  }, [socket, playerIndex]);
-
   const shareLink = `${window.location.origin}/room/${code}`;
   const canStart = state?.players.filter(p => p.connected).length >= 2;
   const isCreator = state?.createdBy === socketId;
@@ -407,7 +410,7 @@ function WaitingRoom() {
   if (!state) {
     return (
       <div className="app">
-        <NameBar onNameChange={handleNameChange} />
+        
         <div className="waiting">
           {error ? <div className="error">{error}</div> : <p>Loading room...</p>}
         </div>
@@ -417,9 +420,8 @@ function WaitingRoom() {
 
   return (
     <div className="app">
-      <NameBar onNameChange={handleNameChange} />
+      
       <div className="waiting">
-        <a href="/" className="home-link">← Home</a>
         <h2>Waiting Room</h2>
         <div className="room-code">{code}</div>
 
@@ -550,12 +552,6 @@ function GamePage() {
 
   const endTurn = useCallback(() => socket.current?.emit('end-turn'), [socket]);
   const pass = useCallback((index) => socket.current?.emit('pass', { index }), [socket]);
-  const handleNameChange = useCallback((name) => {
-    if (playerIndex !== null) {
-      socket.current?.emit('rename-player', { index: playerIndex, name });
-    }
-  }, [socket, playerIndex]);
-
   // Acting on ANOTHER player's clock requires a confirming second click;
   // acting on your own is instant. `armed` tracks the pending other-player action.
   const [armed, setArmed] = useState(null);
@@ -583,7 +579,7 @@ function GamePage() {
   const togglePause = useCallback(() => socket.current?.emit('toggle-pause'), [socket]);
 
   if (!state) {
-    return <div className="app"><NameBar onNameChange={handleNameChange} /><p style={{ textAlign: 'center', padding: '40px' }}>Connecting...</p></div>;
+    return <div className="app"><p style={{ textAlign: 'center', padding: '40px' }}>Connecting...</p></div>;
   }
 
   const activeIdx = state.activePlayerIndex;
@@ -592,9 +588,8 @@ function GamePage() {
 
   return (
     <div className="app">
-      <NameBar onNameChange={handleNameChange} />
+      
       <div className="game">
-        <a href="/" className="home-link">← Home</a>
         <div className="round-header">
           <div className="round-badge">Round {state.round}</div>
           {state.phase === 'playing' && (
@@ -759,14 +754,8 @@ function GameOverPage() {
     socket.current?.emit('reset-game', {});
     navigate('/');
   }, [socket, navigate]);
-  const handleNameChange = useCallback((name) => {
-    if (playerIndex !== null) {
-      socket.current?.emit('rename-player', { index: playerIndex, name });
-    }
-  }, [socket, playerIndex]);
-
   if (!state) {
-    return <div className="app"><NameBar onNameChange={handleNameChange} /><p style={{ textAlign: 'center', padding: '40px' }}>Loading...</p></div>;
+    return <div className="app"><p style={{ textAlign: 'center', padding: '40px' }}>Loading...</p></div>;
   }
 
   const isRoundOver = state.phase === 'round-over';
@@ -777,9 +766,8 @@ function GameOverPage() {
 
   return (
     <div className="app">
-      <NameBar onNameChange={handleNameChange} />
+      
       <div className="game-over">
-        <a href="/" className="home-link">← Home</a>
         <h2>{isRoundOver ? `Round ${state.round} Complete` : 'Game Over'}</h2>
         {winner && (
           <div className="winner-name" style={{ color: winner.color }}>
@@ -846,6 +834,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <SocketProvider>
+        <AppHeader />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/room/:code" element={<WaitingRoom />} />
