@@ -1,8 +1,19 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { execSync } from 'node:child_process';
+
+let appVersion = 'unknown';
+try {
+  appVersion = execSync('git describe --long --always --dirty', { cwd: __dirname }).toString().trim();
+} catch {
+  // not a git checkout — fall back to 'unknown'
+}
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   server: {
     host: '0.0.0.0',
     proxy: {

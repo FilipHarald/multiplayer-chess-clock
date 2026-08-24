@@ -313,6 +313,7 @@ function HomePage() {
 
         {error && <div className="error">{error}</div>}
       </div>
+      <div className="version-footer">{__APP_VERSION__}</div>
     </div>
   );
 }
