@@ -520,6 +520,10 @@ function GamePage() {
       navigate(`/gameover/${code}`, { state: { playerIndex: s.myIndex ?? playerIndex, state: s } });
     };
     const onNewRound = ({ state: s }) => { setState(s); setTimers(s.players.map(p => p.timerMs)); };
+    const onRoundOver = ({ state: s }) => {
+      setState(s);
+      navigate(`/gameover/${code}`, { state: { playerIndex: s.myIndex ?? playerIndex, state: s } });
+    };
 
     s.on('state-update', onStateUpdate);
     s.on('timer-tick', onTimerTick);
@@ -527,6 +531,7 @@ function GamePage() {
     s.on('player-passed', onPlayerPassed);
     s.on('game-over', onGameOver);
     s.on('new-round', onNewRound);
+    s.on('round-over', onRoundOver);
 
     return () => {
       s.off('state-update', onStateUpdate);
@@ -535,6 +540,7 @@ function GamePage() {
       s.off('player-passed', onPlayerPassed);
       s.off('game-over', onGameOver);
       s.off('new-round', onNewRound);
+      s.off('round-over', onRoundOver);
     };
   // Re-attach when `connected` flips: on a cold load of /room/CODE this effect
   // runs before SocketProvider has created the socket (child effects first),
@@ -543,20 +549,42 @@ function GamePage() {
   }, [code, socket, connected, navigate]);
 
   const endTurn = useCallback(() => socket.current?.emit('end-turn'), [socket]);
-  const pass = useCallback(() => socket.current?.emit('pass'), [socket]);
+  const pass = useCallback((index) => socket.current?.emit('pass', { index }), [socket]);
   const handleNameChange = useCallback((name) => {
     if (playerIndex !== null) {
       socket.current?.emit('rename-player', { index: playerIndex, name });
     }
   }, [socket, playerIndex]);
 
+  // Acting on ANOTHER player's clock requires a confirming second click;
+  // acting on your own is instant. `armed` tracks the pending other-player action.
+  const [armed, setArmed] = useState(null);
+
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(null), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+
+  useEffect(() => { setArmed(null); }, [state?.phase]);
+
+  const handleEndTurn = useCallback((i) => {
+    if (i === playerIndex) { setArmed(null); endTurn(); return; }
+    if (armed && armed.index === i && armed.action === 'end') { setArmed(null); endTurn(); return; }
+    setArmed({ index: i, action: 'end' });
+  }, [playerIndex, armed, endTurn]);
+
+  const handlePass = useCallback((i) => {
+    if (i === playerIndex) { setArmed(null); pass(i); return; }
+    if (armed && armed.index === i && armed.action === 'pass') { setArmed(null); pass(i); return; }
+    setArmed({ index: i, action: 'pass' });
+  }, [playerIndex, armed, pass]);
+
   if (!state) {
     return <div className="app"><NameBar onNameChange={handleNameChange} /><p style={{ textAlign: 'center', padding: '40px' }}>Connecting...</p></div>;
   }
 
   const activeIdx = state.activePlayerIndex;
-  const amActive = state.turnOrder[state.currentTurnIndex] === playerIndex;
-  const amPassed = state.passOrder.includes(playerIndex);
 
   return (
     <div className="app">
@@ -564,6 +592,10 @@ function GamePage() {
       <div className="game">
         <a href="/" className="home-link">← Home</a>
         <div className="round-badge">Round {state.round}</div>
+
+        {state.phase === 'playing' && state.paused && (
+          <div className="paused-banner">Clocks paused — the first turn of the round resumes them</div>
+        )}
 
         <div className="turn-order">
           {state.turnOrder.map((pIdx, i) => (
@@ -582,17 +614,20 @@ function GamePage() {
           const passPosition = state.passOrder.indexOf(i);
           const timer = timers[i] ?? p.timerMs;
           const isLow = timer < 30000 && timer > 0;
+          const armedHere = armed && armed.index === i;
+          const canAct = state.phase === 'playing' && p.connected && !hasPassed;
 
           let cardClass = 'player-card';
           if (isActive) cardClass += ' active';
           if (hasPassed) cardClass += ' passed';
+          if (armedHere) cardClass += ' armed-target';
 
           return (
             <div
               key={i}
               className={cardClass}
               style={{ '--player-color': p.color }}
-              onClick={isActive && amActive ? endTurn : undefined}
+              onClick={isActive && state.phase === 'playing' ? () => handleEndTurn(i) : undefined}
             >
               <div className="player-info">
                 <div className="player-name" style={{ color: p.color }}>
@@ -611,20 +646,37 @@ function GamePage() {
               <div className={`player-timer ${isLow ? 'low' : ''}`}>
                 {formatTime(timer)}
               </div>
+              {canAct && (
+                <div className="card-actions" onClick={(e) => e.stopPropagation()}>
+                  {isActive && (
+                    <button
+                      className={`btn-mini btn-end ${armedHere && armed.action === 'end' ? 'armed' : ''}`}
+                      title={isMe ? 'End your own turn' : `End ${p.name}'s turn for them`}
+                      onClick={() => handleEndTurn(i)}
+                    >
+                      {armedHere && armed.action === 'end'
+                        ? `Confirm: end ${p.name}'s turn`
+                        : isMe
+                          ? 'End Turn'
+                          : `End ${p.name}'s turn`}
+                    </button>
+                  )}
+                  <button
+                    className={`btn-mini btn-pass ${armedHere && armed.action === 'pass' ? 'armed' : ''}`}
+                    title={isMe ? 'Pass for yourself' : `Pass ${p.name} for them`}
+                    onClick={() => handlePass(i)}
+                  >
+                    {armedHere && armed.action === 'pass'
+                      ? `Confirm: pass ${p.name}`
+                      : isMe
+                        ? 'Pass'
+                        : `Pass ${p.name}`}
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
-
-        {state.phase === 'playing' && (
-          <div className="game-actions">
-            <button className="btn btn-pass" onClick={pass} disabled={!amActive || amPassed}>
-              Pass
-            </button>
-            <button className="btn btn-end-turn" onClick={endTurn} disabled={!amActive}>
-              End Turn
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -697,17 +749,18 @@ function GameOverPage() {
     return <div className="app"><NameBar onNameChange={handleNameChange} /><p style={{ textAlign: 'center', padding: '40px' }}>Loading...</p></div>;
   }
 
-  const winner = state.players[state.activePlayerIndex] || state.players.find((p, i) =>
+  const isRoundOver = state.phase === 'round-over';
+  const winner = isRoundOver ? null : state.players[state.activePlayerIndex] || state.players.find((p, i) =>
     !state.passOrder.includes(i) && p.timerMs > 0
   );
-  const loser = state.players.find((p, i) => p.timerMs <= 0);
+  const loser = isRoundOver ? null : state.players.find((p, i) => p.timerMs <= 0);
 
   return (
     <div className="app">
       <NameBar onNameChange={handleNameChange} />
       <div className="game-over">
         <a href="/" className="home-link">← Home</a>
-        <h2>Game Over</h2>
+        <h2>{isRoundOver ? `Round ${state.round} Complete` : 'Game Over'}</h2>
         {winner && (
           <div className="winner-name" style={{ color: winner.color }}>
             {winner.name} Wins!
@@ -719,17 +772,42 @@ function GameOverPage() {
           </p>
         )}
 
-        <div className="player-list" style={{ width: '100%' }}>
-          {state.players.map((p, i) => (
-            <div key={i} className="player-slot connected">
-              <div className="player-dot" style={{ background: p.color }} />
-              <span>{p.name}</span>
-              <span style={{ marginLeft: 'auto', fontFamily: 'monospace' }}>
-                {formatTime(p.timerMs)}
-              </span>
+        {isRoundOver && (
+          <>
+            <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+              Everyone passed — next round runs in pass order:
+            </p>
+            <div className="player-list" style={{ width: '100%' }}>
+              {state.passOrder.map((pIdx, pos) => {
+                const p = state.players[pIdx];
+                return (
+                  <div key={pIdx} className="player-slot connected">
+                    <span style={{ fontFamily: 'monospace', opacity: 0.6 }}>{pos + 1}.</span>
+                    <div className="player-dot" style={{ background: p.color }} />
+                    <span>{p.name}</span>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>
+              The next round starts with all clocks paused.
+            </p>
+          </>
+        )}
+
+        {!isRoundOver && (
+          <div className="player-list" style={{ width: '100%' }}>
+            {state.players.map((p, i) => (
+              <div key={i} className="player-slot connected">
+                <div className="player-dot" style={{ background: p.color }} />
+                <span>{p.name}</span>
+                <span style={{ marginLeft: 'auto', fontFamily: 'monospace' }}>
+                  {formatTime(p.timerMs)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="game-over-actions">
           {canINextRound && (

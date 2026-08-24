@@ -47,6 +47,7 @@ function createRoom(playerCount, minutesPerPlayer, settings = {}) {
     passOrder: [],
     phase: 'lobby',
     timerInterval: null,
+    paused: false,
     createdAt: Date.now(),
     createdBy: null,
     creatorName: null,
@@ -65,7 +66,7 @@ function startTimerTick(code) {
   if (!room || room.timerInterval) return;
 
   room.timerInterval = setInterval(() => {
-    if (room.phase !== 'playing') return;
+    if (room.phase !== 'playing' || room.paused) return;
 
     const activeIdx = room.turnOrder[room.currentTurnIndex];
     const player = room.players[activeIdx];
@@ -98,7 +99,7 @@ function stopTimerTick(code) {
 
 function advanceTurn(code) {
   const room = rooms.get(code);
-  if (!room || room.phase !== 'playing') return;
+  if (!room || room.phase !== 'playing' || room.turnOrder.length === 0) return;
 
   room.currentTurnIndex++;
   if (room.currentTurnIndex >= room.turnOrder.length) {
@@ -111,23 +112,18 @@ function advanceTurn(code) {
   });
 }
 
+// A round ends only once every connected player has passed — the last player
+// keeps taking turns (their End Turn cycles back to themselves) until they pass too.
 function checkRoundOver(code) {
   const room = rooms.get(code);
-  if (!room) return;
+  if (!room) return false;
 
-  const stillInRound = room.turnOrder.filter((pIdx) => !room.passOrder.includes(pIdx));
+  const stillInRound = room.players.filter((p, i) => p.connected && !room.passOrder.includes(i));
 
-  if (stillInRound.length <= 1) {
+  if (stillInRound.length === 0) {
     stopTimerTick(code);
-
-    if (stillInRound.length === 1) {
-      const winnerIdx = stillInRound[0];
-      room.phase = 'game-over';
-      io.to(code).emit('game-over', { winnerId: winnerIdx, state: serializeState(room) });
-    } else {
-      room.phase = 'round-over';
-      io.to(code).emit('round-over', { state: serializeState(room) });
-    }
+    room.phase = 'round-over';
+    io.to(code).emit('round-over', { state: serializeState(room) });
     return true;
   }
 
@@ -143,6 +139,7 @@ function startNextRound(code) {
   room.currentTurnIndex = 0;
   room.passOrder = [];
   room.phase = 'playing';
+  room.paused = true;
 
   startTimerTick(code);
   io.to(code).emit('new-round', { state: serializeState(room) });
@@ -169,6 +166,7 @@ function serializeState(room, forSocketId) {
     round: room.round,
     passOrder: room.passOrder,
     phase: room.phase,
+    paused: room.paused,
     createdBy: room.createdBy,
     settings: room.settings,
     myIndex: playerIdx,
@@ -285,6 +283,7 @@ io.on('connection', (socket) => {
     room.phase = 'playing';
     room.round = 1;
     room.passOrder = [];
+    room.paused = false;
 
     startTimerTick(currentRoom);
     io.to(currentRoom).emit('game-started', { state: serializeState(room) });
@@ -294,30 +293,48 @@ io.on('connection', (socket) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room || room.phase !== 'playing') return;
+    if (room.turnOrder.length === 0) return;
 
-    const activeIdx = room.turnOrder[room.currentTurnIndex];
-    if (room.players[activeIdx]?.id !== socket.id) return;
+    // Any connected room member may end the turn of the active player
+    const senderIdx = room.players.findIndex((p) => p.id === socket.id);
+    if (senderIdx === -1 || !room.players[senderIdx].connected) return;
+
+    room.paused = false;
 
     advanceTurn(currentRoom);
   });
 
-  socket.on('pass', () => {
+  socket.on('pass', ({ index } = {}) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room || room.phase !== 'playing') return;
 
-    const activeIdx = room.turnOrder[room.currentTurnIndex];
-    if (room.players[activeIdx]?.id !== socket.id) return;
+    // Any connected room member may pass for anyone; default is your own slot
+    const senderIdx = room.players.findIndex((p) => p.id === socket.id);
+    if (senderIdx === -1 || !room.players[senderIdx].connected) return;
 
-    room.passOrder.push(activeIdx);
-    room.turnOrder.splice(room.currentTurnIndex, 1);
+    const targetIdx = Number.isInteger(index) ? index : senderIdx;
+    const target = room.players[targetIdx];
+    if (!target || !target.connected || room.passOrder.includes(targetIdx)) return;
 
-    if (room.currentTurnIndex >= room.turnOrder.length) {
-      room.currentTurnIndex = 0;
+    room.paused = false;
+    room.passOrder.push(targetIdx);
+
+    // Remove the passer from the turn rotation; keep currentTurnIndex pointing
+    // at the same position so the clock hands over to the next player.
+    const orderPos = room.turnOrder.indexOf(targetIdx);
+    if (orderPos !== -1) {
+      room.turnOrder.splice(orderPos, 1);
+      if (orderPos < room.currentTurnIndex) {
+        room.currentTurnIndex--;
+      }
+      if (room.currentTurnIndex >= room.turnOrder.length && room.turnOrder.length > 0) {
+        room.currentTurnIndex = 0;
+      }
     }
 
     io.to(currentRoom).emit('player-passed', {
-      playerIndex: activeIdx,
+      playerIndex: targetIdx,
       state: serializeState(room),
     });
 
@@ -327,7 +344,7 @@ io.on('connection', (socket) => {
   socket.on('next-round', () => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
-    if (!room || room.phase !== 'game-over') return;
+    if (!room || (room.phase !== 'game-over' && room.phase !== 'round-over')) return;
 
     // Permission: creator or allowAnyoneToStart
     const isCreator = room.createdBy === socket.id;
@@ -369,6 +386,7 @@ io.on('connection', (socket) => {
     room.round = 1;
     room.passOrder = [];
     room.phase = 'lobby';
+    room.paused = false;
     // Keep createdBy and settings
 
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
