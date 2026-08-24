@@ -198,9 +198,10 @@ io.on('connection', (socket) => {
   socket.on('join-room', ({ code, name, deviceId }, cb) => {
     const room = rooms.get(code);
     if (!room) return cb({ error: 'Room not found' });
-    if (room.phase === 'playing') return cb({ error: 'Game already in progress' });
 
-    // Check if this device is already in the room (same device, new socket)
+    // Check if this device is already in the room (same device, new socket).
+    // Allowed in any phase: this is how players re-enter after a page refresh
+    // or when navigating from the lobby into the started game.
     if (deviceId) {
       const existingIdx = room.players.findIndex((p) => p.deviceId === deviceId);
       if (existingIdx !== -1) {
@@ -233,6 +234,9 @@ io.on('connection', (socket) => {
       cb({ state: serializeState(room), playerIndex: 0 });
       return;
     }
+
+    // Brand-new players (no existing slot) may only join before the game starts
+    if (room.phase === 'playing') return cb({ error: 'Game already in progress' });
 
     const freeSlot = room.players.findIndex((p) => p.id === null);
     if (freeSlot === -1) return cb({ error: 'Room is full' });
