@@ -24,6 +24,16 @@ function getDeviceId() {
   return id;
 }
 
+function getPlayerName() {
+  let name = localStorage.getItem('mcc-player-name');
+  if (!name) {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    name = Array.from({ length: 6 }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+    localStorage.setItem('mcc-player-name', name);
+  }
+  return name;
+}
+
 function fallbackCopy(text) {
   const ta = document.createElement('textarea');
   ta.value = text;
@@ -89,7 +99,7 @@ function useSocket() {
 
 function NameBar({ onNameChange }) {
   const { socketId } = useSocket();
-  const [name, setName] = useState(() => localStorage.getItem('mcc-player-name') || '');
+  const [name, setName] = useState(() => getPlayerName());
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const inputRef = useRef(null);
@@ -155,7 +165,7 @@ function HomePage() {
   const autoJoinDone = useRef(false);
   const [publicRooms, setPublicRooms] = useState([]);
 
-  const playerName = localStorage.getItem('mcc-player-name') || '';
+  const playerName = getPlayerName();
 
   // Fetch public rooms on mount
   useEffect(() => {
@@ -326,7 +336,7 @@ function WaitingRoom() {
   const [playerIndex, setPlayerIndex] = useState(null);
   const [error, setError] = useState('');
   const joinedRef = useRef(false);
-  const playerName = localStorage.getItem('mcc-player-name') || '';
+  const playerName = getPlayerName();
 
   // Join room once socket is connected — always re-join so server tracks this socket
   useEffect(() => {
@@ -480,7 +490,7 @@ function GamePage() {
   const [playerIndex, setPlayerIndex] = useState(null);
   const [timers, setTimers] = useState([]);
   const joinedRef = useRef(false);
-  const playerName = localStorage.getItem('mcc-player-name') || '';
+  const playerName = getPlayerName();
 
   useEffect(() => {
     const s = socket.current;
@@ -627,7 +637,7 @@ function GameOverPage() {
   const [state, setState] = useState(null);
   const [playerIndex, setPlayerIndex] = useState(null);
   const joinedRef = useRef(false);
-  const playerName = localStorage.getItem('mcc-player-name') || '';
+  const playerName = getPlayerName();
 
   useEffect(() => {
     const s = socket.current;
