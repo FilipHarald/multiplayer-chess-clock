@@ -365,7 +365,11 @@ function WaitingRoom() {
       s.off('player-left', onPlayerLeft);
       s.off('game-started', onGameStarted);
     };
-  }, [code, socket, navigate]);
+  // Re-attach when `connected` flips: on a cold load of /room/CODE this effect
+  // runs before SocketProvider has created the socket (child effects first),
+  // so `socket.current` is still null. Without this dep the room event
+  // listeners are never attached and the lobby freezes at the join snapshot.
+  }, [code, socket, connected, navigate]);
 
   const startGame = useCallback(() => {
     socket.current?.emit('start-game');
@@ -522,7 +526,11 @@ function GamePage() {
       s.off('game-over', onGameOver);
       s.off('new-round', onNewRound);
     };
-  }, [code, socket, navigate]);
+  // Re-attach when `connected` flips: on a cold load of /room/CODE this effect
+  // runs before SocketProvider has created the socket (child effects first),
+  // so `socket.current` is still null. Without this dep the room event
+  // listeners are never attached and the lobby freezes at the join snapshot.
+  }, [code, socket, connected, navigate]);
 
   const endTurn = useCallback(() => socket.current?.emit('end-turn'), [socket]);
   const pass = useCallback(() => socket.current?.emit('pass'), [socket]);
@@ -655,7 +663,11 @@ function GameOverPage() {
       s.off('game-over', onGameOver);
       s.off('new-round', onNewRound);
     };
-  }, [code, socket, navigate]);
+  // Re-attach when `connected` flips: on a cold load of /room/CODE this effect
+  // runs before SocketProvider has created the socket (child effects first),
+  // so `socket.current` is still null. Without this dep the room event
+  // listeners are never attached and the lobby freezes at the join snapshot.
+  }, [code, socket, connected, navigate]);
 
   const isCreator = state?.createdBy === socketId;
   const canINextRound = isCreator || state?.settings?.allowAnyoneToStart;
