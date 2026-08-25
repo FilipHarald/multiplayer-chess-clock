@@ -540,6 +540,16 @@ body {
   font-size: 0.85rem;
   text-align: center;
   animation: pulse-disconnect 2s ease-in-out infinite;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.disconnect-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
 }
 
 @keyframes pulse-disconnect {
