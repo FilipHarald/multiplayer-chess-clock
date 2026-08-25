@@ -539,7 +539,7 @@ function GamePage() {
     if (!s) return;
     const onStateUpdate = ({ state: s }) => {
       setState(s); setTimers(s.players.map(p => p.timerMs));
-      const myIdx = s.myIndex ?? playerIndex;
+      const myIdx = s.myIndex ?? myIndexRef.current;
       myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
       if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
@@ -558,7 +558,7 @@ function GamePage() {
     };
     const onTurnChanged = ({ state: s }) => {
       setState(s); setTimers(s.players.map(p => p.timerMs));
-      const myIdx = s.myIndex ?? playerIndex;
+      const myIdx = s.myIndex ?? myIndexRef.current;
       myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
       if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
@@ -567,7 +567,7 @@ function GamePage() {
     };
     const onPlayerPassed = ({ state: s }) => {
       setState(s); setTimers(s.players.map(p => p.timerMs));
-      const myIdx = s.myIndex ?? playerIndex;
+      const myIdx = s.myIndex ?? myIndexRef.current;
       myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
       if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
@@ -576,7 +576,7 @@ function GamePage() {
     };
     const onPlayerUnpassed = ({ state: s }) => {
       setState(s); setTimers(s.players.map(p => p.timerMs));
-      const myIdx = s.myIndex ?? playerIndex;
+      const myIdx = s.myIndex ?? myIndexRef.current;
       myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
       if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
@@ -586,19 +586,20 @@ function GamePage() {
     const onGameOver = ({ state: s }) => {
       setState(s);
       setTimers(s.players.map(p => p.timerMs));
-      myIndexRef.current = s.myIndex ?? playerIndex;
+      const goMyIdx = s.myIndex ?? myIndexRef.current;
+      myIndexRef.current = goMyIdx;
       setIsMyTurn(false);
-      navigate(`/gameover/${code}`, { state: { playerIndex: s.myIndex ?? playerIndex, state: s } });
+      navigate(`/gameover/${code}`, { state: { playerIndex: goMyIdx, state: s } });
     };
     const onNewRound = ({ state: s }) => {
       setState(s); setTimers(s.players.map(p => p.timerMs));
-      myIndexRef.current = s.myIndex ?? playerIndex;
-      const myIdx = s.myIndex ?? playerIndex;
-      setIsMyTurn(s.activePlayerIndex === myIdx);
+      const nrMyIdx = s.myIndex ?? myIndexRef.current;
+      myIndexRef.current = nrMyIdx;
+      setIsMyTurn(s.activePlayerIndex === nrMyIdx);
     };
     const onRoundOver = ({ state: s }) => {
       setState(s);
-      navigate(`/gameover/${code}`, { state: { playerIndex: s.myIndex ?? playerIndex, state: s } });
+      navigate(`/gameover/${code}`, { state: { playerIndex: s.myIndex ?? myIndexRef.current, state: s } });
     };
 
     s.on('state-update', onStateUpdate);
