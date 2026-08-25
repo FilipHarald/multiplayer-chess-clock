@@ -484,6 +484,25 @@ function WaitingRoom() {
   );
 }
 
+// Simple notification sound via Web Audio API — a short "ding"
+let _audioCtx = null;
+function playTurnSound() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = _audioCtx.createOscillator();
+    const gain = _audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(_audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, _audioCtx.currentTime);
+    osc.frequency.setValueAtTime(1100, _audioCtx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.15, _audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, _audioCtx.currentTime + 0.3);
+    osc.start(_audioCtx.currentTime);
+    osc.stop(_audioCtx.currentTime + 0.3);
+  } catch { /* audio blocked */ }
+}
+
 function GamePage() {
   const { socket, connected, socketId } = useSocket();
   const { code } = useParams();
@@ -493,6 +512,9 @@ function GamePage() {
   const [timers, setTimers] = useState([]);
   const joinedRef = useRef(false);
   const playerName = getPlayerName();
+  // Track previous active player to detect turn changes for notification
+  const prevActiveRef = useRef(null);
+  const [isMyTurn, setIsMyTurn] = useState(false);
 
   useEffect(() => {
     const s = socket.current;
@@ -506,16 +528,42 @@ function GamePage() {
       setState(res.state);
       setPlayerIndex(res.playerIndex);
       setTimers(res.state.players.map(p => p.timerMs));
+      prevActiveRef.current = res.state.activePlayerIndex;
+      setIsMyTurn(res.state.activePlayerIndex === res.state.myIndex);
     });
   }, [code, socket, connected, navigate, playerName]);
 
   useEffect(() => {
     const s = socket.current;
     if (!s) return;
-    const onStateUpdate = ({ state: s }) => { setState(s); setTimers(s.players.map(p => p.timerMs)); };
-    const onTimerTick = ({ timers: t }) => setTimers(t);
-    const onTurnChanged = ({ state: s }) => { setState(s); setTimers(s.players.map(p => p.timerMs)); };
+    const onStateUpdate = ({ state: s }) => {
+      setState(s); setTimers(s.players.map(p => p.timerMs));
+      const myIdx = s.myIndex ?? playerIndex;
+      const nowMyTurn = s.activePlayerIndex === myIdx;
+      if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
+      prevActiveRef.current = s.activePlayerIndex;
+      setIsMyTurn(nowMyTurn);
+    };
+    const onTimerTick = ({ timers: t, activePlayerIndex }) => {
+      setTimers(t);
+      const myIdx = state?.myIndex ?? playerIndex;
+      if (activePlayerIndex !== undefined) {
+        const nowMyTurn = activePlayerIndex === myIdx;
+        if (nowMyTurn && prevActiveRef.current !== activePlayerIndex) playTurnSound();
+        prevActiveRef.current = activePlayerIndex;
+        setIsMyTurn(nowMyTurn);
+      }
+    };
+    const onTurnChanged = ({ state: s }) => {
+      setState(s); setTimers(s.players.map(p => p.timerMs));
+      const myIdx = s.myIndex ?? playerIndex;
+      const nowMyTurn = s.activePlayerIndex === myIdx;
+      if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
+      prevActiveRef.current = s.activePlayerIndex;
+      setIsMyTurn(nowMyTurn);
+    };
     const onPlayerPassed = ({ state: s }) => { setState(s); setTimers(s.players.map(p => p.timerMs)); };
+    const onPlayerUnpassed = ({ state: s }) => { setState(s); setTimers(s.players.map(p => p.timerMs)); };
     const onGameOver = ({ state: s }) => {
       setState(s);
       setTimers(s.players.map(p => p.timerMs));
@@ -531,6 +579,7 @@ function GamePage() {
     s.on('timer-tick', onTimerTick);
     s.on('turn-changed', onTurnChanged);
     s.on('player-passed', onPlayerPassed);
+    s.on('player-unpassed', onPlayerUnpassed);
     s.on('game-over', onGameOver);
     s.on('new-round', onNewRound);
     s.on('round-over', onRoundOver);
@@ -540,6 +589,7 @@ function GamePage() {
       s.off('timer-tick', onTimerTick);
       s.off('turn-changed', onTurnChanged);
       s.off('player-passed', onPlayerPassed);
+      s.off('player-unpassed', onPlayerUnpassed);
       s.off('game-over', onGameOver);
       s.off('new-round', onNewRound);
       s.off('round-over', onRoundOver);
@@ -552,6 +602,7 @@ function GamePage() {
 
   const endTurn = useCallback(() => socket.current?.emit('end-turn'), [socket]);
   const pass = useCallback((index) => socket.current?.emit('pass', { index }), [socket]);
+  const unpass = useCallback((index) => socket.current?.emit('unpass', { index }), [socket]);
   // Acting on ANOTHER player's clock requires a confirming second click;
   // acting on your own is instant. `armed` tracks the pending other-player action.
   const [armed, setArmed] = useState(null);
@@ -576,6 +627,12 @@ function GamePage() {
     setArmed({ index: i, action: 'pass' });
   }, [playerIndex, armed, pass]);
 
+  const handleUnpass = useCallback((i) => {
+    if (i === playerIndex) { setArmed(null); unpass(i); return; }
+    if (armed && armed.index === i && armed.action === 'unpass') { setArmed(null); unpass(i); return; }
+    setArmed({ index: i, action: 'unpass' });
+  }, [playerIndex, armed, unpass]);
+
   const togglePause = useCallback(() => socket.current?.emit('toggle-pause'), [socket]);
 
   if (!state) {
@@ -586,8 +643,14 @@ function GamePage() {
   const isCreator = state.createdBy === socketId;
   const canIPause = isCreator || state.settings?.allowAnyoneToPause;
 
+  // Upcoming turn order: remaining players after current + passed players in pass order
+  const upcomingInRound = state.turnOrder.slice(state.currentTurnIndex + 1);
+  const upcomingFromStart = state.turnOrder.slice(0, state.currentTurnIndex);
+  const upcomingRemaining = [...upcomingInRound, ...upcomingFromStart];
+  const upcomingPassed = state.passOrder;
+
   return (
-    <div className="app">
+    <div className={`app ${isMyTurn && state.phase === 'playing' && !state.paused ? 'my-turn-active' : ''}`}>
       
       <div className="game">
         <div className="round-header">
@@ -603,6 +666,10 @@ function GamePage() {
             </button>
           )}
         </div>
+
+        {isMyTurn && state.phase === 'playing' && !state.paused && (
+          <div className="your-turn-banner">Your turn!</div>
+        )}
 
         {state.phase === 'playing' && state.paused && (
           <div className="paused-banner">
@@ -621,6 +688,44 @@ function GamePage() {
             />
           ))}
         </div>
+
+        {/* Upcoming turn order list */}
+        {state.phase === 'playing' && (upcomingRemaining.length > 0 || upcomingPassed.length > 0) && (
+          <div className="upcoming-order">
+            <div className="upcoming-label">Up next</div>
+            {upcomingRemaining.map((pIdx, pos) => (
+              <div key={pIdx} className="upcoming-item">
+                <span className="upcoming-pos">{pos + 1}.</span>
+                <div className="player-dot" style={{ background: state.players[pIdx].color }} />
+                <span className="upcoming-name">{state.players[pIdx].name}</span>
+              </div>
+            ))}
+            {upcomingPassed.length > 0 && (
+              <>
+                <div className="upcoming-divider">Passed</div>
+                {upcomingPassed.map((pIdx) => {
+                  const passPos = state.passOrder.indexOf(pIdx);
+                  const isMe = pIdx === playerIndex;
+                  const armedHere = armed && armed.index === pIdx && armed.action === 'unpass';
+                  return (
+                    <div key={pIdx} className="upcoming-item passed-item">
+                      <span className="upcoming-pos">{passPos + 1}.</span>
+                      <div className="player-dot" style={{ background: state.players[pIdx].color }} />
+                      <span className="upcoming-name">{state.players[pIdx].name}</span>
+                      <button
+                        className={`btn-mini btn-unpass ${armedHere ? 'armed' : ''}`}
+                        onClick={() => handleUnpass(pIdx)}
+                        title={isMe ? 'Un-pass yourself' : `Un-pass ${state.players[pIdx].name}`}
+                      >
+                        {armedHere ? 'Confirm' : 'Un-pass'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
 
         {state.players.map((p, i) => {
           const isActive = activeIdx === i;

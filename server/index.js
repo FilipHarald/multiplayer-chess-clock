@@ -5,9 +5,60 @@ import cors from 'cors';
 import { nanoid } from 'nanoid';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import Database from 'better-sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// ---------- SQLite persistence ----------
+
+const db = new Database(join(__dirname, 'chess-clock.db'));
+db.pragma('journal_mode = WAL');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS rooms (
+    code TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )
+`);
+
+function saveRoom(room) {
+  const { timerInterval, ...serializable } = room;
+  db.prepare('INSERT OR REPLACE INTO rooms (code, data, created_at) VALUES (?, ?, ?)')
+    .run(room.code, JSON.stringify(serializable), room.createdAt);
+}
+
+function loadRooms() {
+  const rows = db.prepare('SELECT code, data, created_at FROM rooms').all();
+  const loaded = [];
+  for (const row of rows) {
+    try {
+      const room = JSON.parse(row.data);
+      room.timerInterval = null;
+      room.pausedBy = room.pausedBy ?? null;
+      loaded.push(room);
+    } catch { /* skip corrupt row */ }
+  }
+  return loaded;
+}
+
+function deleteRoom(code) {
+  db.prepare('DELETE FROM rooms WHERE code = ?').run(code);
+}
+
+// Cleanup rooms older than 24h — run every 6h
+setInterval(() => {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const stale = db.prepare('SELECT code FROM rooms WHERE created_at < ?').all(cutoff);
+  for (const { code } of stale) {
+    deleteRoom(code);
+    rooms.delete(code);
+    console.log(`Cleaned up stale room ${code}`);
+  }
+  if (stale.length > 0) console.log(`Purged ${stale.length} rooms older than 24h`);
+}, 6 * 60 * 60 * 1000);
+
+// ---------- Express + Socket.IO ----------
 
 const app = express();
 app.use(cors());
@@ -19,6 +70,12 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 3001;
 const rooms = new Map();
+
+// Restore persisted rooms into memory
+for (const room of loadRooms()) {
+  rooms.set(room.code, room);
+}
+console.log(`Restored ${rooms.size} rooms from database`);
 
 const PLAYER_COLORS = [
   '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
@@ -38,7 +95,7 @@ function createRoom(playerCount, minutesPerPlayer, settings = {}) {
     connected: false,
   }));
 
-  rooms.set(code, {
+  const room = {
     code,
     players,
     turnOrder: Array.from({ length: playerCount }, (_, i) => i),
@@ -57,9 +114,16 @@ function createRoom(playerCount, minutesPerPlayer, settings = {}) {
       allowAnyoneToPause: settings.allowAnyoneToPause ?? false,
       public: settings.public ?? false,
     },
-  });
+  };
 
-  return rooms.get(code);
+  rooms.set(code, room);
+  saveRoom(room);
+  return room;
+}
+
+function persistRoom(code) {
+  const room = rooms.get(code);
+  if (room) saveRoom(room);
 }
 
 function startTimerTick(code) {
@@ -79,6 +143,7 @@ function startTimerTick(code) {
       clearInterval(room.timerInterval);
       room.timerInterval = null;
       room.phase = 'game-over';
+      persistRoom(code);
       io.to(code).emit('game-over', { loserId: activeIdx, state: serializeState(room) });
       return;
     }
@@ -124,6 +189,7 @@ function checkRoundOver(code) {
   if (stillInRound.length === 0) {
     stopTimerTick(code);
     room.phase = 'round-over';
+    persistRoom(code);
     io.to(code).emit('round-over', { state: serializeState(room) });
     return true;
   }
@@ -144,6 +210,7 @@ function startNextRound(code) {
   room.pausedBy = 'round-start';
 
   startTimerTick(code);
+  persistRoom(code);
   io.to(code).emit('new-round', { state: serializeState(room) });
 }
 
@@ -193,6 +260,7 @@ io.on('connection', (socket) => {
     room.players[0].deviceId = deviceId || null;
     room.players[0].connected = true;
     if (name) room.players[0].name = name;
+    persistRoom(room.code);
     cb({ state: serializeState(room), playerIndex: 0 });
   });
 
@@ -214,6 +282,7 @@ io.on('connection', (socket) => {
         socket.join(code);
         currentRoom = code;
         playerIndex = existingIdx;
+        persistRoom(code);
         io.to(code).emit('player-joined', { state: serializeState(room) });
         cb({ state: serializeState(room), playerIndex: existingIdx });
         return;
@@ -231,6 +300,7 @@ io.on('connection', (socket) => {
       socket.join(code);
       currentRoom = code;
       playerIndex = 0;
+      persistRoom(code);
       io.to(code).emit('player-joined', { state: serializeState(room) });
       cb({ state: serializeState(room), playerIndex: 0 });
       return;
@@ -251,6 +321,7 @@ io.on('connection', (socket) => {
     currentRoom = code;
     playerIndex = freeSlot;
 
+    persistRoom(code);
     io.to(code).emit('player-joined', { state: serializeState(room) });
     cb({ state: serializeState(room), playerIndex: freeSlot });
   });
@@ -262,6 +333,7 @@ io.on('connection', (socket) => {
     // Use server-tracked playerIndex, not client-sent index
     if (playerIndex === null) return;
     room.players[playerIndex].name = name;
+    persistRoom(currentRoom);
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
@@ -290,6 +362,7 @@ io.on('connection', (socket) => {
     room.pausedBy = null;
 
     startTimerTick(currentRoom);
+    persistRoom(currentRoom);
     io.to(currentRoom).emit('game-started', { state: serializeState(room) });
   });
 
@@ -312,6 +385,7 @@ io.on('connection', (socket) => {
     }
 
     advanceTurn(currentRoom);
+    persistRoom(currentRoom);
   });
 
   socket.on('pass', ({ index } = {}) => {
@@ -349,12 +423,40 @@ io.on('connection', (socket) => {
       }
     }
 
+    persistRoom(currentRoom);
     io.to(currentRoom).emit('player-passed', {
       playerIndex: targetIdx,
       state: serializeState(room),
     });
 
     checkRoundOver(currentRoom);
+  });
+
+  socket.on('unpass', ({ index }) => {
+    if (currentRoom === null) return;
+    const room = rooms.get(currentRoom);
+    if (!room || room.phase !== 'playing') return;
+
+    const senderIdx = room.players.findIndex((p) => p.id === socket.id);
+    if (senderIdx === -1 || !room.players[senderIdx].connected) return;
+
+    const targetIdx = Number.isInteger(index) ? index : senderIdx;
+    const passPos = room.passOrder.indexOf(targetIdx);
+    if (passPos === -1) return;
+
+    // Remove from passOrder
+    room.passOrder.splice(passPos, 1);
+
+    // Re-add to turnOrder — insert after the current position so they play next
+    // or at end if currentTurnIndex is past the insertion point
+    const insertAt = Math.min(room.currentTurnIndex + 1, room.turnOrder.length);
+    room.turnOrder.splice(insertAt, 0, targetIdx);
+
+    persistRoom(currentRoom);
+    io.to(currentRoom).emit('player-unpassed', {
+      playerIndex: targetIdx,
+      state: serializeState(room),
+    });
   });
 
   socket.on('next-round', () => {
@@ -385,6 +487,7 @@ io.on('connection', (socket) => {
     room.paused = !room.paused;
     room.pausedBy = room.paused ? senderIdx : null;
 
+    persistRoom(currentRoom);
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
@@ -425,6 +528,7 @@ io.on('connection', (socket) => {
     room.pausedBy = null;
     // Keep createdBy and settings
 
+    persistRoom(currentRoom);
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
@@ -439,6 +543,7 @@ io.on('connection', (socket) => {
       room.players[pIdx].id = null;
     }
 
+    persistRoom(currentRoom);
     io.to(currentRoom).emit('player-left', {
       playerIndex: pIdx,
       state: serializeState(room),
@@ -451,6 +556,7 @@ io.on('connection', (socket) => {
         if (r && !r.players.some((p) => p.connected)) {
           stopTimerTick(currentRoom);
           rooms.delete(currentRoom);
+          deleteRoom(currentRoom);
         }
       }, 60000);
     }
