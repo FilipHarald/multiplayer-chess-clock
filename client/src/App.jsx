@@ -450,16 +450,14 @@ function WaitingRoom() {
         </div>
 
         <div className="player-list">
-          {displayOrder.map((pIdx, pos) => {
+          {displayOrder.filter(pIdx => state.players[pIdx]?.connected).map((pIdx, pos) => {
             const p = state.players[pIdx];
-            if (!p) return null;
-            const isHost = p.index === 0 && state.createdBy;
             const isMe = pIdx === playerIndex;
 
             return (
               <div
                 key={pIdx}
-                className={`player-slot ${p.connected ? 'connected' : 'empty'} ${canReorder ? 'draggable' : ''}`}
+                className={`player-slot connected ${canReorder ? 'draggable' : ''}`}
                 draggable={canReorder}
                 onDragStart={(e) => handleDragStart(e, pos)}
                 onDragEnd={handleDragEnd}
@@ -469,17 +467,13 @@ function WaitingRoom() {
                 {canReorder && <span className="drag-handle" title="Drag to reorder">⠿</span>}
                 <span className="turn-order-pos">{pos + 1}.</span>
                 <div className="player-dot" style={{ background: p.color }} />
-                {p.connected ? (
-                  <div className="player-slot-content">
-                    <div className="player-slot-name">
-                      <span>{p.name}</span>
-                      {isMe && <span className="me-badge">you</span>}
-                      {p.index === 0 && state.createdBy && <span className="host-badge">host</span>}
-                    </div>
+                <div className="player-slot-content">
+                  <div className="player-slot-name">
+                    <span>{p.name}</span>
+                    {isMe && <span className="me-badge">you</span>}
+                    {p.index === 0 && state.createdBy && <span className="host-badge">host</span>}
                   </div>
-                ) : (
-                  <span>Waiting for player...</span>
-                )}
+                </div>
               </div>
             );
           })}
@@ -756,16 +750,18 @@ function GamePage() {
   useEffect(() => { setArmed(null); setDisconnectedPlayer(null); }, [state?.phase]);
 
   const handleEndTurn = useCallback((i) => {
-    if (i === playerIndex) { setArmed(null); endTurn(); return; }
+    const isDisconnected = state?.players[i] && !state.players[i].connected;
+    if (i === playerIndex || isDisconnected) { setArmed(null); endTurn(); return; }
     if (armed && armed.index === i && armed.action === 'end') { setArmed(null); endTurn(); return; }
     setArmed({ index: i, action: 'end' });
-  }, [playerIndex, armed, endTurn]);
+  }, [playerIndex, armed, endTurn, state]);
 
   const handlePass = useCallback((i) => {
-    if (i === playerIndex) { setArmed(null); pass(i); return; }
+    const isDisconnected = state?.players[i] && !state.players[i].connected;
+    if (i === playerIndex || isDisconnected) { setArmed(null); pass(i); return; }
     if (armed && armed.index === i && armed.action === 'pass') { setArmed(null); pass(i); return; }
     setArmed({ index: i, action: 'pass' });
-  }, [playerIndex, armed, pass]);
+  }, [playerIndex, armed, pass, state]);
 
   const handleUnpass = useCallback((i) => {
     if (i === playerIndex) { setArmed(null); unpass(i); return; }
@@ -782,6 +778,8 @@ function GamePage() {
   const activeIdx = state.activePlayerIndex;
   const isCreator = state.createdBy === socketId;
   const canIPause = isCreator || state.settings?.allowAnyoneToPause;
+  const isPausedByDisconnect = state.paused && String(state.pausedBy).startsWith('disconnected:');
+  const canIResume = canIPause || isPausedByDisconnect;
 
   // Upcoming turn order: remaining players after current + passed players in pass order
   const upcomingInRound = state.turnOrder.slice(state.currentTurnIndex + 1);
@@ -799,8 +797,8 @@ function GamePage() {
             <button
               className={`btn btn-pause ${state.paused ? 'btn-resume' : ''}`}
               onClick={togglePause}
-              disabled={!canIPause}
-              title={canIPause ? undefined : 'Only the host can pause'}
+              disabled={!canIPause && !canIResume}
+              title={canIPause || canIResume ? undefined : 'Only the host can pause'}
             >
               {state.paused ? 'Resume' : 'Pause'}
             </button>
@@ -864,10 +862,10 @@ function GamePage() {
         )}
 
         <div className="turn-order">
-          {state.turnOrder.map((pIdx, i) => (
+          {state.turnOrder.filter(pIdx => state.players[pIdx]?.connected).map((pIdx, i) => (
             <div
               key={pIdx}
-              className={`turn-dot ${i === state.currentTurnIndex ? 'current' : ''}`}
+              className={`turn-dot ${state.turnOrder.indexOf(pIdx) === state.currentTurnIndex ? 'current' : ''}`}
               style={{ background: state.players[pIdx].color, color: state.players[pIdx].color }}
             />
           ))}
@@ -911,15 +909,16 @@ function GamePage() {
           </div>
         )}
 
-        {state.players.map((p, i) => {
-          const isActive = activeIdx === i;
-          const hasPassed = state.passOrder.includes(i);
-          const isMe = i === playerIndex;
-          const passPosition = state.passOrder.indexOf(i);
-          const timer = timers[i] ?? p.timerMs;
+        {state.players.filter(p => p.connected).map((p, i) => {
+          const origIdx = state.players.indexOf(p);
+          const isActive = activeIdx === origIdx;
+          const hasPassed = state.passOrder.includes(origIdx);
+          const isMe = origIdx === playerIndex;
+          const passPosition = state.passOrder.indexOf(origIdx);
+          const timer = timers[origIdx] ?? p.timerMs;
           const isLow = timer < 30000 && timer > 0;
-          const armedHere = armed && armed.index === i;
-          const canAct = state.phase === 'playing' && p.connected && !hasPassed;
+          const armedHere = armed && armed.index === origIdx;
+          const canAct = state.phase === 'playing' && !hasPassed;
 
           let cardClass = 'player-card';
           if (isActive) cardClass += ' active';
@@ -928,10 +927,10 @@ function GamePage() {
 
           return (
             <div
-              key={i}
+              key={origIdx}
               className={cardClass}
               style={{ '--player-color': p.color }}
-              onClick={isActive && state.phase === 'playing' ? () => handleEndTurn(i) : undefined}
+              onClick={isActive && state.phase === 'playing' ? () => handleEndTurn(origIdx) : undefined}
             >
               <div className="player-info">
                 <div className="player-name" style={{ color: p.color }}>
@@ -956,7 +955,7 @@ function GamePage() {
                     <button
                       className={`btn-mini btn-end ${armedHere && armed.action === 'end' ? 'armed' : ''}`}
                       title={isMe ? 'End your own turn' : `End ${p.name}'s turn for them`}
-                      onClick={() => handleEndTurn(i)}
+                      onClick={() => handleEndTurn(origIdx)}
                     >
                       {armedHere && armed.action === 'end'
                         ? `Confirm: end ${p.name}'s turn`
@@ -968,7 +967,7 @@ function GamePage() {
                   <button
                     className={`btn-mini btn-pass ${armedHere && armed.action === 'pass' ? 'armed' : ''}`}
                     title={isMe ? 'Pass for yourself' : `Pass ${p.name} for them`}
-                    onClick={() => handlePass(i)}
+                    onClick={() => handlePass(origIdx)}
                   >
                     {armedHere && armed.action === 'pass'
                       ? `Confirm: pass ${p.name}`
