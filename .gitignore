@@ -2,3 +2,7 @@ node_modules/
 client/dist/
 .env
 *.log
+.scratch/
+server/chess-clock.db
+server/chess-clock.db-shm
+server/chess-clock.db-wal
