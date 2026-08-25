@@ -25,11 +25,11 @@ function getDeviceId() {
 }
 
 function getPlayerName() {
-  let name = localStorage.getItem('mcc-player-name');
+  let name = sessionStorage.getItem('mcc-player-name');
   if (!name) {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     name = Array.from({ length: 6 }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
-    localStorage.setItem('mcc-player-name', name);
+    sessionStorage.setItem('mcc-player-name', name);
   }
   return name;
 }
@@ -515,6 +515,7 @@ function GamePage() {
   // Track previous active player to detect turn changes for notification
   const prevActiveRef = useRef(null);
   const [isMyTurn, setIsMyTurn] = useState(false);
+  const [disconnectedPlayer, setDisconnectedPlayer] = useState(null);
 
   useEffect(() => {
     const s = socket.current;
@@ -601,6 +602,20 @@ function GamePage() {
       setState(s);
       navigate(`/gameover/${code}`, { state: { playerIndex: s.myIndex ?? myIndexRef.current, state: s } });
     };
+    const onPlayerLeft = ({ playerIndex: pIdx, playerName, state: s }) => {
+      setState(s); setTimers(s.players.map(p => p.timerMs));
+      setDisconnectedPlayer({ index: pIdx, name: playerName || s.players[pIdx]?.name || `Player ${pIdx + 1}` });
+      const myIdx = s.myIndex ?? myIndexRef.current;
+      myIndexRef.current = myIdx;
+      setIsMyTurn(s.activePlayerIndex === myIdx);
+    };
+    const onPlayerReconnected = ({ playerIndex: pIdx, playerName, state: s }) => {
+      setState(s); setTimers(s.players.map(p => p.timerMs));
+      setDisconnectedPlayer(null);
+      const myIdx = s.myIndex ?? myIndexRef.current;
+      myIndexRef.current = myIdx;
+      setIsMyTurn(s.activePlayerIndex === myIdx);
+    };
 
     s.on('state-update', onStateUpdate);
     s.on('timer-tick', onTimerTick);
@@ -610,6 +625,8 @@ function GamePage() {
     s.on('game-over', onGameOver);
     s.on('new-round', onNewRound);
     s.on('round-over', onRoundOver);
+    s.on('player-left', onPlayerLeft);
+    s.on('player-reconnected', onPlayerReconnected);
 
     return () => {
       s.off('state-update', onStateUpdate);
@@ -620,6 +637,8 @@ function GamePage() {
       s.off('game-over', onGameOver);
       s.off('new-round', onNewRound);
       s.off('round-over', onRoundOver);
+      s.off('player-left', onPlayerLeft);
+      s.off('player-reconnected', onPlayerReconnected);
     };
   // Re-attach when `connected` flips: on a cold load of /room/CODE this effect
   // runs before SocketProvider has created the socket (child effects first),
@@ -641,7 +660,7 @@ function GamePage() {
     return () => clearTimeout(t);
   }, [armed]);
 
-  useEffect(() => { setArmed(null); }, [state?.phase]);
+  useEffect(() => { setArmed(null); setDisconnectedPlayer(null); }, [state?.phase]);
 
   const handleEndTurn = useCallback((i) => {
     if (i === playerIndex) { setArmed(null); endTurn(); return; }
@@ -699,7 +718,15 @@ function GamePage() {
           <div className="paused-banner">
             {state.pausedBy === 'round-start'
               ? 'Clocks paused — the first turn of the round resumes them'
-              : `Paused by ${state.players[state.pausedBy]?.name ?? 'host'} — press Resume to continue`}
+              : state.pausedBy?.startsWith('disconnected:')
+                ? `${state.players[Number(state.pausedBy.split(':')[1])]?.name ?? 'A player'} disconnected — clock paused`
+                : `Paused by ${state.players[state.pausedBy]?.name ?? 'host'} — press Resume to continue`}
+          </div>
+        )}
+
+        {state.phase === 'playing' && disconnectedPlayer && (
+          <div className="disconnect-banner">
+            {disconnectedPlayer.name} has left the room — waiting for reconnection
           </div>
         )}
 

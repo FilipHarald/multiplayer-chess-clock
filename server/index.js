@@ -277,13 +277,27 @@ io.on('connection', (socket) => {
         // Device already has a slot — reassign this socket to that slot
         const oldSocketId = room.players[existingIdx].id;
         room.players[existingIdx].id = socket.id;
+        const wasDisconnected = !room.players[existingIdx].connected;
         room.players[existingIdx].connected = true;
         if (name) room.players[existingIdx].name = name;
         socket.join(code);
         currentRoom = code;
         playerIndex = existingIdx;
         persistRoom(code);
-        io.to(code).emit('player-joined', { state: serializeState(room) });
+
+        // Auto-resume if the disconnected player reconnects during gameplay
+        if (wasDisconnected && room.phase === 'playing' &&
+            room.pausedBy && room.pausedBy.startsWith('disconnected:')) {
+          room.paused = false;
+          room.pausedBy = null;
+          startTimerTick(code);
+        }
+
+        io.to(code).emit(wasDisconnected ? 'player-reconnected' : 'player-joined', {
+          playerIndex: existingIdx,
+          playerName: room.players[existingIdx].name,
+          state: serializeState(room),
+        });
         cb({ state: serializeState(room), playerIndex: existingIdx });
         return;
       }
@@ -295,13 +309,27 @@ io.on('connection', (socket) => {
     if (isCreatorRejoin) {
       room.players[0].id = socket.id;
       room.players[0].deviceId = deviceId || null;
+      const wasDisconnected = !room.players[0].connected;
       room.players[0].connected = true;
       room.players[0].name = name;
       socket.join(code);
       currentRoom = code;
       playerIndex = 0;
       persistRoom(code);
-      io.to(code).emit('player-joined', { state: serializeState(room) });
+
+      // Auto-resume if the creator reconnects during gameplay
+      if (wasDisconnected && room.phase === 'playing' &&
+          room.pausedBy && room.pausedBy.startsWith('disconnected:')) {
+        room.paused = false;
+        room.pausedBy = null;
+        startTimerTick(code);
+      }
+
+      io.to(code).emit(wasDisconnected ? 'player-reconnected' : 'player-joined', {
+        playerIndex: 0,
+        playerName: name,
+        state: serializeState(room),
+      });
       cb({ state: serializeState(room), playerIndex: 0 });
       return;
     }
@@ -543,9 +571,19 @@ io.on('connection', (socket) => {
       room.players[pIdx].id = null;
     }
 
+    // Auto-pause when a player disconnects during gameplay
+    if (room.phase === 'playing' && pIdx !== -1) {
+      if (!room.paused) {
+        stopTimerTick(currentRoom);
+        room.paused = true;
+        room.pausedBy = `disconnected:${pIdx}`;
+      }
+    }
+
     persistRoom(currentRoom);
     io.to(currentRoom).emit('player-left', {
       playerIndex: pIdx,
+      playerName: pIdx !== -1 ? room.players[pIdx].name : null,
       state: serializeState(room),
     });
 

@@ -458,6 +458,22 @@ body {
   text-align: center;
 }
 
+.disconnect-banner {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  text-align: center;
+  animation: pulse-disconnect 2s ease-in-out infinite;
+}
+
+@keyframes pulse-disconnect {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* ---------- Game Over ---------- */
 
 .game-over {
