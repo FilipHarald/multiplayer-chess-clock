@@ -510,6 +510,37 @@ function WaitingRoom() {
           })}
         </div>
 
+        {isCreator && (
+          <div className="settings-section">
+            <div className="checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.settings?.allowAnyoneToStart ?? true}
+                  onChange={e => socket.current?.emit('update-settings', { allowAnyoneToStart: e.target.checked })}
+                />
+                Allow anyone to start the game
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.settings?.allowAnyoneToPause ?? true}
+                  onChange={e => socket.current?.emit('update-settings', { allowAnyoneToPause: e.target.checked })}
+                />
+                Allow anyone to pause the clock
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.settings?.public ?? true}
+                  onChange={e => socket.current?.emit('update-settings', { public: e.target.checked })}
+                />
+                List publicly (visible on home page)
+              </label>
+            </div>
+          </div>
+        )}
+
         {canIShowStart ? (
           <button className="btn btn-primary" onClick={startGame} disabled={!canStart}>
             {canStart ? 'Start Game' : 'Need at least 2 players'}
@@ -731,6 +762,7 @@ function GamePage() {
   const activeIdx = state.activePlayerIndex;
   const isCreator = state.createdBy === socketId;
   const canIPause = isCreator || state.settings?.allowAnyoneToPause;
+  const [showSettings, setShowSettings] = useState(false);
 
   // Upcoming turn order: remaining players after current + passed players in pass order
   const upcomingInRound = state.turnOrder.slice(state.currentTurnIndex + 1);
@@ -754,7 +786,47 @@ function GamePage() {
               {state.paused ? 'Resume' : 'Pause'}
             </button>
           )}
+          {isCreator && (
+            <button
+              className="btn btn-small btn-settings"
+              onClick={() => setShowSettings(!showSettings)}
+              title="Game settings"
+            >
+              {showSettings ? 'Hide Settings' : 'Settings'}
+            </button>
+          )}
         </div>
+
+        {isCreator && showSettings && (
+          <div className="settings-section">
+            <div className="checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.settings?.allowAnyoneToStart ?? true}
+                  onChange={e => socket.current?.emit('update-settings', { allowAnyoneToStart: e.target.checked })}
+                />
+                Allow anyone to start the game
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.settings?.allowAnyoneToPause ?? true}
+                  onChange={e => socket.current?.emit('update-settings', { allowAnyoneToPause: e.target.checked })}
+                />
+                Allow anyone to pause the clock
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.settings?.public ?? true}
+                  onChange={e => socket.current?.emit('update-settings', { public: e.target.checked })}
+                />
+                List publicly (visible on home page)
+              </label>
+            </div>
+          </div>
+        )}
 
         {state.phase === 'playing' && state.paused && (
           <div className="paused-banner">

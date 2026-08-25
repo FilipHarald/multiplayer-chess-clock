@@ -535,6 +535,26 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
+  socket.on('update-settings', (settings) => {
+    if (currentRoom === null) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+    if (room.phase !== 'lobby' && room.phase !== 'playing') return;
+
+    const isCreator = room.createdBy === socket.id;
+    if (!isCreator) return;
+
+    const allowed = ['allowAnyoneToStart', 'allowAnyoneToPause', 'public'];
+    for (const key of allowed) {
+      if (typeof settings[key] === 'boolean') {
+        room.settings[key] = settings[key];
+      }
+    }
+
+    persistRoom(currentRoom);
+    io.to(currentRoom).emit('state-update', { state: serializeState(room) });
+  });
+
   socket.on('reset-game', ({ playerCount, minutesPerPlayer }) => {
     if (currentRoom === null) return;
     stopTimerTick(currentRoom);

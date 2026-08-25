@@ -262,6 +262,19 @@ body {
   outline: none;
 }
 
+.settings-section {
+  background: var(--bg-secondary);
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 12px 16px;
+  width: 100%;
+}
+
+.btn-settings {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
 /* ---------- Game ---------- */
 
 .game {
