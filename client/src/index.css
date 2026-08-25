@@ -212,6 +212,30 @@ body {
   border-radius: 8px;
 }
 
+.player-slot.draggable {
+  cursor: grab;
+}
+
+.player-slot.draggable:active {
+  cursor: grabbing;
+}
+
+.drag-handle {
+  color: #555;
+  font-size: 1.1rem;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.turn-order-pos {
+  font-family: monospace;
+  opacity: 0.5;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  min-width: 1.5em;
+  text-align: right;
+}
+
 .player-dot {
   width: 14px;
   height: 14px;

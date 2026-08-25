@@ -100,6 +100,7 @@ function createRoom(playerCount, minutesPerPlayer, settings = {}) {
   const room = {
     code,
     players,
+    waitingOrder: Array.from({ length: playerCount }, (_, i) => i),
     turnOrder: Array.from({ length: playerCount }, (_, i) => i),
     currentTurnIndex: 0,
     round: 1,
@@ -231,6 +232,7 @@ function serializeState(room, forSocketId) {
       timerMs: p.timerMs,
       connected: p.connected,
     })),
+    waitingOrder: room.waitingOrder,
     turnOrder: room.turnOrder,
     currentTurnIndex: room.currentTurnIndex,
     activePlayerIndex: room.turnOrder[room.currentTurnIndex],
@@ -351,6 +353,27 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
+  socket.on('reorder-players', ({ order }) => {
+    if (currentRoom === null) return;
+    const room = rooms.get(currentRoom);
+    if (!room || room.phase !== 'lobby') return;
+
+    // Only creator or allowAnyoneToStart may reorder
+    const isCreator = room.createdBy === socket.id;
+    if (!isCreator && !room.settings.allowAnyoneToStart) return;
+
+    // Validate: must be an array of valid player indices with no duplicates
+    if (!Array.isArray(order)) return;
+    const valid = new Set(room.players.map((_, i) => i));
+    if (order.length !== room.players.length) return;
+    if (!order.every((idx) => valid.has(idx))) return;
+    if (new Set(order).size !== order.length) return;
+
+    room.waitingOrder = order;
+    persistRoom(currentRoom);
+    io.to(currentRoom).emit('state-update', { state: serializeState(room) });
+  });
+
   socket.on('start-game', () => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
@@ -367,7 +390,14 @@ io.on('connection', (socket) => {
 
     if (connectedPlayers.length < 2) return;
 
-    room.turnOrder = connectedPlayers.map((p) => p.originalIndex);
+    // Use waitingOrder if available, otherwise fall back to connected order
+    const connectedIndices = new Set(connectedPlayers.map((p) => p.originalIndex));
+    const ordered = (room.waitingOrder || []).filter((idx) => connectedIndices.has(idx));
+    // Add any connected players not in waitingOrder (e.g. joined after order was set)
+    for (const idx of connectedIndices) {
+      if (!ordered.includes(idx)) ordered.push(idx);
+    }
+    room.turnOrder = ordered;
     room.currentTurnIndex = 0;
     room.phase = 'playing';
     room.round = 1;
@@ -534,6 +564,7 @@ io.on('connection', (socket) => {
     });
 
     room.turnOrder = room.players.map((_, i) => i);
+    room.waitingOrder = room.players.map((_, i) => i);
     room.currentTurnIndex = 0;
     room.round = 1;
     room.passOrder = [];

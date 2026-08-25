@@ -403,7 +403,9 @@ function WaitingRoom() {
   const canStart = state?.players.filter(p => p.connected).length >= 2;
   const isCreator = state?.createdBy === socketId;
   const canIShowStart = isCreator || state?.settings?.allowAnyoneToStart;
+  const canReorder = isCreator || state?.settings?.allowAnyoneToStart;
   const [copyState, setCopyState] = useState('idle');
+  const dragIndexRef = useRef(null);
 
   const handleCopyLink = useCallback(() => {
     copyToClipboard(shareLink).then(ok => {
@@ -411,6 +413,35 @@ function WaitingRoom() {
       setTimeout(() => setCopyState('idle'), 2000);
     });
   }, [shareLink]);
+
+  const displayOrder = state?.waitingOrder || state?.players.map((_, i) => i) || [];
+
+  const handleDragStart = useCallback((e, idx) => {
+    dragIndexRef.current = idx;
+    e.dataTransfer.effectAllowed = 'move';
+    e.currentTarget.style.opacity = '0.4';
+  }, []);
+
+  const handleDragEnd = useCallback((e) => {
+    e.currentTarget.style.opacity = '1';
+    dragIndexRef.current = null;
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const handleDrop = useCallback((e, dropIdx) => {
+    e.preventDefault();
+    const dragIdx = dragIndexRef.current;
+    if (dragIdx === null || dragIdx === dropIdx) return;
+
+    const newOrder = [...displayOrder];
+    const [moved] = newOrder.splice(dragIdx, 1);
+    newOrder.splice(dropIdx, 0, moved);
+    socket.current?.emit('reorder-players', { order: newOrder });
+  }, [displayOrder, socket]);
 
   if (!state) {
     return (
@@ -444,25 +475,31 @@ function WaitingRoom() {
         </div>
 
         <div className="player-list">
-          {state.players.map((p, i) => {
+          {displayOrder.map((pIdx, pos) => {
+            const p = state.players[pIdx];
+            if (!p) return null;
             const isHost = p.index === 0 && state.createdBy;
-            const isMe = i === playerIndex;
-            const isThisSlotHost = state.createdBy && p.connected && (() => {
-              // Check if this player slot's socket matches the creator
-              // We can't directly compare socket IDs from the player list,
-              // but slot 0 is the creator's original slot
-              return i === 0;
-            })();
+            const isMe = pIdx === playerIndex;
 
             return (
-              <div key={i} className={`player-slot ${p.connected ? 'connected' : 'empty'}`}>
+              <div
+                key={pIdx}
+                className={`player-slot ${p.connected ? 'connected' : 'empty'} ${canReorder ? 'draggable' : ''}`}
+                draggable={canReorder}
+                onDragStart={(e) => handleDragStart(e, pos)}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, pos)}
+              >
+                {canReorder && <span className="drag-handle" title="Drag to reorder">⠿</span>}
+                <span className="turn-order-pos">{pos + 1}.</span>
                 <div className="player-dot" style={{ background: p.color }} />
                 {p.connected ? (
                   <div className="player-slot-content">
                     <div className="player-slot-name">
                       <span>{p.name}</span>
                       {isMe && <span className="me-badge">you</span>}
-                      {i === 0 && state.createdBy && <span className="host-badge">host</span>}
+                      {p.index === 0 && state.createdBy && <span className="host-badge">host</span>}
                     </div>
                   </div>
                 ) : (
