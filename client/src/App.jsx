@@ -589,6 +589,7 @@ function GamePage() {
   const prevActiveRef = useRef(null);
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [disconnectedPlayer, setDisconnectedPlayer] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     const s = socket.current;
@@ -762,7 +763,6 @@ function GamePage() {
   const activeIdx = state.activePlayerIndex;
   const isCreator = state.createdBy === socketId;
   const canIPause = isCreator || state.settings?.allowAnyoneToPause;
-  const [showSettings, setShowSettings] = useState(false);
 
   // Upcoming turn order: remaining players after current + passed players in pass order
   const upcomingInRound = state.turnOrder.slice(state.currentTurnIndex + 1);
