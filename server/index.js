@@ -445,7 +445,9 @@ io.on('connection', (socket) => {
 
     const targetIdx = Number.isInteger(index) ? index : senderIdx;
     const target = room.players[targetIdx];
-    if (!target || !target.connected || room.passOrder.includes(targetIdx)) return;
+    if (!target || room.passOrder.includes(targetIdx)) return;
+    const isPausedByDisconnect = room.paused && String(room.pausedBy).startsWith('disconnected:');
+    if (!target.connected && !isPausedByDisconnect) return;
 
     // A manual pause is a hard stop: no turn actions until resumed.
     if (room.paused && room.pausedBy !== 'round-start') return;
@@ -522,11 +524,12 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoom);
     if (!room || room.phase !== 'playing') return;
 
-    // Permission: creator or allowAnyoneToPause
     const senderIdx = room.players.findIndex((p) => p.id === socket.id);
     if (senderIdx === -1 || !room.players[senderIdx].connected) return;
+
     const isCreator = room.createdBy === socket.id;
-    if (!isCreator && !room.settings.allowAnyoneToPause) return;
+    const isPausedByDisconnect = room.paused && String(room.pausedBy).startsWith('disconnected:');
+    if (!isCreator && !room.settings.allowAnyoneToPause && !isPausedByDisconnect) return;
 
     // A manual pause stays until resumed explicitly; a round-start pause is
     // lifted by the first turn action instead (see end-turn/pass below).

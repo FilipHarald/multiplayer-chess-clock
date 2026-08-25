@@ -395,6 +395,11 @@ body {
   opacity: 0.5;
 }
 
+.player-card.disconnected-card {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
 .player-info {
   display: flex;
   flex-direction: column;
