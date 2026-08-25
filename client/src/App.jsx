@@ -479,43 +479,6 @@ function WaitingRoom() {
           })}
         </div>
 
-        {state.phase === 'playing' && state.players.filter(p => !p.connected).map((p) => {
-          const origIdx = state.players.indexOf(p);
-          const isActive = activeIdx === origIdx;
-          const isMe = origIdx === playerIndex;
-
-          let cardClass = 'player-card disconnected-card';
-          if (isActive) cardClass += ' active';
-
-          return (
-            <div key={origIdx} className={cardClass} style={{ '--player-color': p.color }}>
-              <div className="player-info">
-                <div className="player-name" style={{ color: p.color }}>
-                  {p.name} <span style={{ fontSize: '0.7em', opacity: 0.6 }}>(disconnected)</span>
-                </div>
-                <div className="player-status">
-                  {isActive ? (
-                    <span style={{ color: p.color }}>Active</span>
-                  ) : (
-                    <span>Passed</span>
-                  )}
-                </div>
-              </div>
-              {state.paused && (
-                <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="btn-mini btn-pass"
-                    title={`Pass ${p.name}`}
-                    onClick={() => handlePass(origIdx)}
-                  >
-                    {`Pass ${p.name}`}
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-
         {state && (
           <div className="time-info">
             <div className="time-info-row">
@@ -1011,6 +974,53 @@ function GamePage() {
                       : isMe
                         ? 'Pass'
                         : `Pass ${p.name}`}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {state.phase === 'playing' && state.players.filter(p => !p.connected).map((p) => {
+          const origIdx = state.players.indexOf(p);
+          const isActive = activeIdx === origIdx;
+          const isMe = origIdx === playerIndex;
+          const isPausedByDisconnect = state.paused && String(state.pausedBy).startsWith('disconnected:');
+
+          let cardClass = 'player-card disconnected-card';
+          if (isActive) cardClass += ' active';
+
+          return (
+            <div key={origIdx} className={cardClass} style={{ '--player-color': p.color }}>
+              <div className="player-info">
+                <div className="player-name" style={{ color: p.color }}>
+                  {p.name} <span style={{ fontSize: '0.7em', opacity: 0.6 }}>(disconnected)</span>
+                </div>
+                <div className="player-status">
+                  {isActive ? (
+                    <span style={{ color: p.color }}>Active</span>
+                  ) : (
+                    <span>Passed</span>
+                  )}
+                </div>
+              </div>
+              {isPausedByDisconnect && (
+                <div className="card-actions" onClick={(e) => e.stopPropagation()}>
+                  {isActive && (
+                    <button
+                      className="btn-mini btn-end"
+                      title={`End ${p.name}'s turn`}
+                      onClick={() => handleEndTurn(origIdx)}
+                    >
+                      {`End ${p.name}'s turn`}
+                    </button>
+                  )}
+                  <button
+                    className="btn-mini btn-pass"
+                    title={`Pass ${p.name}`}
+                    onClick={() => handlePass(origIdx)}
+                  >
+                    {`Pass ${p.name}`}
                   </button>
                 </div>
               )}
