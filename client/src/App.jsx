@@ -509,7 +509,8 @@ function WaitingRoom() {
               <span>Total max time:</span>
               <span>
                 {(() => {
-                  const total = state.players.length * (state.minutesPerPlayer || 60);
+                  const connected = state.players.filter(p => p.connected).length || state.players.length;
+                  const total = connected * (state.minutesPerPlayer || 60);
                   return `${Math.floor(total / 60)}h ${total % 60}m`;
                 })()}
               </span>
@@ -518,7 +519,8 @@ function WaitingRoom() {
               <span>Expected end time:</span>
               <span>
                 {(() => {
-                  const totalMs = state.players.length * (state.minutesPerPlayer || 60) * 60 * 1000;
+                  const connected = state.players.filter(p => p.connected).length || state.players.length;
+                  const totalMs = connected * (state.minutesPerPlayer || 60) * 60 * 1000;
                   const endTime = new Date(Date.now() + totalMs);
                   return endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 })()}
