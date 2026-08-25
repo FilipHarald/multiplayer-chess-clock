@@ -514,6 +514,16 @@ function WaitingRoom() {
                 })()}
               </span>
             </div>
+            <div className="time-info-row">
+              <span>Expected end time:</span>
+              <span>
+                {(() => {
+                  const totalMs = state.players.length * (state.minutesPerPlayer || 60) * 60 * 1000;
+                  const endTime = new Date(Date.now() + totalMs);
+                  return endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                })()}
+              </span>
+            </div>
           </div>
         )}
 
