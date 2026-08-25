@@ -528,8 +528,9 @@ function GamePage() {
       setState(res.state);
       setPlayerIndex(res.playerIndex);
       setTimers(res.state.players.map(p => p.timerMs));
+      myIndexRef.current = res.state.myIndex ?? res.playerIndex;
       prevActiveRef.current = res.state.activePlayerIndex;
-      setIsMyTurn(res.state.activePlayerIndex === res.state.myIndex);
+      setIsMyTurn(res.state.activePlayerIndex === (res.state.myIndex ?? res.playerIndex));
     });
   }, [code, socket, connected, navigate, playerName]);
 
@@ -539,6 +540,7 @@ function GamePage() {
     const onStateUpdate = ({ state: s }) => {
       setState(s); setTimers(s.players.map(p => p.timerMs));
       const myIdx = s.myIndex ?? playerIndex;
+      myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
       if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
       prevActiveRef.current = s.activePlayerIndex;
@@ -546,8 +548,8 @@ function GamePage() {
     };
     const onTimerTick = ({ timers: t, activePlayerIndex }) => {
       setTimers(t);
-      const myIdx = state?.myIndex ?? playerIndex;
       if (activePlayerIndex !== undefined) {
+        const myIdx = myIndexRef.current;
         const nowMyTurn = activePlayerIndex === myIdx;
         if (nowMyTurn && prevActiveRef.current !== activePlayerIndex) playTurnSound();
         prevActiveRef.current = activePlayerIndex;
@@ -557,19 +559,43 @@ function GamePage() {
     const onTurnChanged = ({ state: s }) => {
       setState(s); setTimers(s.players.map(p => p.timerMs));
       const myIdx = s.myIndex ?? playerIndex;
+      myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
       if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
       prevActiveRef.current = s.activePlayerIndex;
       setIsMyTurn(nowMyTurn);
     };
-    const onPlayerPassed = ({ state: s }) => { setState(s); setTimers(s.players.map(p => p.timerMs)); };
-    const onPlayerUnpassed = ({ state: s }) => { setState(s); setTimers(s.players.map(p => p.timerMs)); };
+    const onPlayerPassed = ({ state: s }) => {
+      setState(s); setTimers(s.players.map(p => p.timerMs));
+      const myIdx = s.myIndex ?? playerIndex;
+      myIndexRef.current = myIdx;
+      const nowMyTurn = s.activePlayerIndex === myIdx;
+      if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
+      prevActiveRef.current = s.activePlayerIndex;
+      setIsMyTurn(nowMyTurn);
+    };
+    const onPlayerUnpassed = ({ state: s }) => {
+      setState(s); setTimers(s.players.map(p => p.timerMs));
+      const myIdx = s.myIndex ?? playerIndex;
+      myIndexRef.current = myIdx;
+      const nowMyTurn = s.activePlayerIndex === myIdx;
+      if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
+      prevActiveRef.current = s.activePlayerIndex;
+      setIsMyTurn(nowMyTurn);
+    };
     const onGameOver = ({ state: s }) => {
       setState(s);
       setTimers(s.players.map(p => p.timerMs));
+      myIndexRef.current = s.myIndex ?? playerIndex;
+      setIsMyTurn(false);
       navigate(`/gameover/${code}`, { state: { playerIndex: s.myIndex ?? playerIndex, state: s } });
     };
-    const onNewRound = ({ state: s }) => { setState(s); setTimers(s.players.map(p => p.timerMs)); };
+    const onNewRound = ({ state: s }) => {
+      setState(s); setTimers(s.players.map(p => p.timerMs));
+      myIndexRef.current = s.myIndex ?? playerIndex;
+      const myIdx = s.myIndex ?? playerIndex;
+      setIsMyTurn(s.activePlayerIndex === myIdx);
+    };
     const onRoundOver = ({ state: s }) => {
       setState(s);
       navigate(`/gameover/${code}`, { state: { playerIndex: s.myIndex ?? playerIndex, state: s } });
@@ -605,6 +631,7 @@ function GamePage() {
   const unpass = useCallback((index) => socket.current?.emit('unpass', { index }), [socket]);
   // Acting on ANOTHER player's clock requires a confirming second click;
   // acting on your own is instant. `armed` tracks the pending other-player action.
+  const myIndexRef = useRef(null);
   const [armed, setArmed] = useState(null);
 
   useEffect(() => {
@@ -666,10 +693,6 @@ function GamePage() {
             </button>
           )}
         </div>
-
-        {isMyTurn && state.phase === 'playing' && !state.paused && (
-          <div className="your-turn-banner">Your turn!</div>
-        )}
 
         {state.phase === 'playing' && state.paused && (
           <div className="paused-banner">
