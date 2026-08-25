@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { nanoid } from 'nanoid';
+import { customAlphabet } from 'nanoid';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import Database from 'better-sqlite3';
@@ -77,6 +77,8 @@ for (const room of loadRooms()) {
 }
 console.log(`Restored ${rooms.size} rooms from database`);
 
+const nanoid = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 8);
+
 const PLAYER_COLORS = [
   '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
   '#1abc9c', '#e67e22', '#34495e', '#e91e63', '#00bcd4',
@@ -85,7 +87,7 @@ const PLAYER_COLORS = [
 // ---------- helpers ----------
 
 function createRoom(playerCount, minutesPerPlayer, settings = {}) {
-  const code = nanoid(6);
+  const code = nanoid();
   const players = Array.from({ length: playerCount }, (_, i) => ({
     id: null,
     deviceId: null,
@@ -285,14 +287,6 @@ io.on('connection', (socket) => {
         playerIndex = existingIdx;
         persistRoom(code);
 
-        // Auto-resume if the disconnected player reconnects during gameplay
-        if (wasDisconnected && room.phase === 'playing' &&
-            room.pausedBy && room.pausedBy.startsWith('disconnected:')) {
-          room.paused = false;
-          room.pausedBy = null;
-          startTimerTick(code);
-        }
-
         io.to(code).emit(wasDisconnected ? 'player-reconnected' : 'player-joined', {
           playerIndex: existingIdx,
           playerName: room.players[existingIdx].name,
@@ -316,14 +310,6 @@ io.on('connection', (socket) => {
       currentRoom = code;
       playerIndex = 0;
       persistRoom(code);
-
-      // Auto-resume if the creator reconnects during gameplay
-      if (wasDisconnected && room.phase === 'playing' &&
-          room.pausedBy && room.pausedBy.startsWith('disconnected:')) {
-        room.paused = false;
-        room.pausedBy = null;
-        startTimerTick(code);
-      }
 
       io.to(code).emit(wasDisconnected ? 'player-reconnected' : 'player-joined', {
         playerIndex: 0,

@@ -303,11 +303,11 @@ function HomePage() {
             <label>Room Code</label>
             <input
               type="text"
-              placeholder="Enter 6-character code"
+              placeholder="Enter 8-character code"
               value={joinCode}
               onChange={e => setJoinCode(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && joinCode.length >= 4 && joinRoom()}
-              maxLength={6}
+              maxLength={8}
               style={{ textTransform: 'uppercase', fontFamily: 'monospace', letterSpacing: '0.15em' }}
             />
           </div>
@@ -357,6 +357,11 @@ function WaitingRoom() {
 
     s.emit('join-room', { code, name: playerName || undefined, deviceId: getDeviceId() }, (res) => {
       if (res.error) { setError(res.error); joinedRef.current = false; return; }
+      // If game already in progress, redirect to game view
+      if (res.state.phase === 'playing' || res.state.phase === 'game-over' || res.state.phase === 'round-over') {
+        navigate(`/game/${code}`, { state: { playerIndex: res.playerIndex, state: res.state } });
+        return;
+      }
       setState(res.state);
       setPlayerIndex(res.playerIndex);
     });
