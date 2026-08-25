@@ -166,9 +166,9 @@ function HomePage() {
   const navigate = useNavigate();
   const [playerCount, setPlayerCount] = useState(3);
   const [minutesPerPlayer, setMinutesPerPlayer] = useState(60);
-  const [allowAnyoneToStart, setAllowAnyoneToStart] = useState(false);
-  const [allowAnyoneToPause, setAllowAnyoneToPause] = useState(false);
-  const [listPublicly, setListPublicly] = useState(false);
+  const [allowAnyoneToStart, setAllowAnyoneToStart] = useState(true);
+  const [allowAnyoneToPause, setAllowAnyoneToPause] = useState(true);
+  const [listPublicly, setListPublicly] = useState(true);
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
   const [searchParams] = useSearchParams();
@@ -723,8 +723,8 @@ function GamePage() {
           <div className="paused-banner">
             {state.pausedBy === 'round-start'
               ? 'Clocks paused — the first turn of the round resumes them'
-              : state.pausedBy?.startsWith('disconnected:')
-                ? `${state.players[Number(state.pausedBy.split(':')[1])]?.name ?? 'A player'} disconnected — clock paused`
+              : String(state.pausedBy).startsWith('disconnected:')
+                ? `${state.players[Number(String(state.pausedBy).split(':')[1])]?.name ?? 'A player'} disconnected — clock paused`
                 : `Paused by ${state.players[state.pausedBy]?.name ?? 'host'} — press Resume to continue`}
           </div>
         )}
