@@ -100,6 +100,7 @@ function createRoom(playerCount, minutesPerPlayer, settings = {}) {
   const room = {
     code,
     players,
+    minutesPerPlayer: minutesPerPlayer || 60,
     waitingOrder: Array.from({ length: playerCount }, (_, i) => i),
     turnOrder: Array.from({ length: playerCount }, (_, i) => i),
     currentTurnIndex: 0,
@@ -243,6 +244,7 @@ function serializeState(room, forSocketId) {
     pausedBy: room.pausedBy,
     createdBy: room.createdBy,
     settings: room.settings,
+    minutesPerPlayer: room.minutesPerPlayer,
     myIndex: playerIdx,
   };
 }
@@ -549,6 +551,24 @@ io.on('connection', (socket) => {
       if (typeof settings[key] === 'boolean') {
         room.settings[key] = settings[key];
       }
+    }
+
+    persistRoom(currentRoom);
+    io.to(currentRoom).emit('state-update', { state: serializeState(room) });
+  });
+
+  socket.on('update-time', ({ minutesPerPlayer }) => {
+    if (currentRoom === null) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+    if (room.phase !== 'lobby') return;
+    if (room.createdBy !== socket.id) return;
+    if (typeof minutesPerPlayer !== 'number' || minutesPerPlayer < 1 || minutesPerPlayer > 999) return;
+
+    room.minutesPerPlayer = minutesPerPlayer;
+    const newTimerMs = minutesPerPlayer * 60 * 1000;
+    for (const p of room.players) {
+      p.timerMs = newTimerMs;
     }
 
     persistRoom(currentRoom);

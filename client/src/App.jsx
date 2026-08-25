@@ -141,8 +141,8 @@ function NameBar() {
         </div>
       )}
       {socketId && (
-        <span className="name-bar-uuid" title="Your connection ID">
-          {socketId.slice(0, 8)}
+        <span className="name-bar-uuid">
+          <span className="name-bar-uuid-label">ID:</span> {socketId.slice(0, 8)}
         </span>
       )}
     </div>
@@ -164,7 +164,6 @@ function AppHeader() {
 function HomePage() {
   const { socket, connected } = useSocket();
   const navigate = useNavigate();
-  const [playerCount, setPlayerCount] = useState(3);
   const [minutesPerPlayer, setMinutesPerPlayer] = useState(60);
   const [allowAnyoneToStart, setAllowAnyoneToStart] = useState(true);
   const [allowAnyoneToPause, setAllowAnyoneToPause] = useState(true);
@@ -202,7 +201,7 @@ function HomePage() {
     const s = socket.current;
     if (!s) return;
     s.emit('create-room', {
-      playerCount,
+      playerCount: 10,
       minutesPerPlayer,
       settings: { allowAnyoneToStart, allowAnyoneToPause, public: listPublicly },
       name: playerName || undefined,
@@ -211,7 +210,7 @@ function HomePage() {
       if (res.error) { setError(res.error); return; }
       navigate(`/room/${res.state.code}`, { state: { playerIndex: 0, state: res.state } });
     });
-  }, [playerCount, minutesPerPlayer, allowAnyoneToStart, allowAnyoneToPause, listPublicly, navigate, socket]);
+  }, [minutesPerPlayer, allowAnyoneToStart, allowAnyoneToPause, listPublicly, navigate, socket]);
 
   const joinRoom = useCallback(() => {
     const s = socket.current;
@@ -224,44 +223,20 @@ function HomePage() {
     });
   }, [joinCode, playerName, navigate, socket]);
 
-  const totalTime = playerCount * minutesPerPlayer;
-
   return (
     <div className="app">
       <div className="setup">
         <h1>Multiplayer Chess Clock</h1>
         <div className="setup-form">
           <div className="field">
-            <label>Number of Players</label>
-            <select value={playerCount} onChange={e => setPlayerCount(Number(e.target.value))}>
-              {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                <option key={n} value={n}>{n} Players</option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
             <label>Minutes per Player</label>
-            <div className="time-input-group">
-              <input
-                type="number"
-                min="1"
-                max="999"
-                value={minutesPerPlayer}
-                onChange={e => setMinutesPerPlayer(Math.max(1, Number(e.target.value) || 1))}
-              />
-              <select
-                value={minutesPerPlayer}
-                onChange={e => setMinutesPerPlayer(Number(e.target.value))}
-              >
-                <option value={10}>10 min</option>
-                <option value={30}>30 min</option>
-                <option value={60}>60 min</option>
-                <option value={90}>90 min</option>
-              </select>
-            </div>
-          </div>
-          <div className="total-time">
-            Total max time: {Math.floor(totalTime / 60)}h {totalTime % 60}m ({totalTime} min)
+            <input
+              type="number"
+              min="1"
+              max="999"
+              value={minutesPerPlayer}
+              onChange={e => setMinutesPerPlayer(Math.max(1, Number(e.target.value) || 1))}
+            />
           </div>
 
           <div className="checkbox-group">
@@ -509,6 +484,38 @@ function WaitingRoom() {
             );
           })}
         </div>
+
+        {state && (
+          <div className="time-info">
+            <div className="time-info-row">
+              <span>Time per player:</span>
+              {isCreator ? (
+                <input
+                  type="number"
+                  min="1"
+                  max="999"
+                  value={state.minutesPerPlayer || 60}
+                  onChange={e => {
+                    const val = Math.max(1, Number(e.target.value) || 1);
+                    socket.current?.emit('update-time', { minutesPerPlayer: val });
+                  }}
+                  className="time-info-input"
+                />
+              ) : (
+                <strong>{state.minutesPerPlayer || 60} min</strong>
+              )}
+            </div>
+            <div className="time-info-row">
+              <span>Total max time:</span>
+              <span>
+                {(() => {
+                  const total = state.players.length * (state.minutesPerPlayer || 60);
+                  return `${Math.floor(total / 60)}h ${total % 60}m`;
+                })()}
+              </span>
+            </div>
+          </div>
+        )}
 
         {isCreator && (
           <div className="settings-section">
