@@ -279,9 +279,15 @@ body {
 
 .drag-handle {
   color: #555;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   user-select: none;
   flex-shrink: 0;
+  letter-spacing: -0.1em;
+}
+
+.player-slot.drag-over {
+  border-color: rgba(255, 255, 100, 0.7) !important;
+  box-shadow: 0 0 12px rgba(255, 255, 100, 0.4), inset 0 0 8px rgba(255, 255, 100, 0.1) !important;
 }
 
 .turn-order-pos {

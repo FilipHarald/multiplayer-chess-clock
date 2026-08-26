@@ -298,16 +298,26 @@ function NewRoom() {
     dragIndexRef.current = idx;
     e.dataTransfer.effectAllowed = 'move';
     e.currentTarget.style.opacity = '0.4';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    e.dataTransfer.setDragImage(e.currentTarget, offsetX, offsetY);
   }, []);
 
   const handleDragEnd = useCallback((e) => {
     e.currentTarget.style.opacity = '1';
     dragIndexRef.current = null;
+    document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
   }, []);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    const slot = e.currentTarget.closest('.player-slot');
+    if (slot && !slot.classList.contains('drag-over')) {
+      document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
+      slot.classList.add('drag-over');
+    }
   }, []);
 
   const handleDrop = useCallback((e, dropIdx) => {
@@ -434,21 +444,18 @@ function NewRoom() {
                   />
                   List publicly (visible on home page)
                 </label>
-                <label className="checkbox-label muted-option">
+                <label className="checkbox-label muted-option" title="Only pass-order is supported for now">
                   <input type="checkbox" checked disabled />
                   Allow users to pass
-                  <span className="muted-tooltip" title="Only pass-order is supported for now">muted</span>
                 </label>
-                <label className="checkbox-label muted-option">
+                <label className="checkbox-label muted-option" title="Only pass-order is supported for now">
                   <input type="checkbox" checked disabled />
                   Use pass-order
-                  <span className="muted-tooltip" title="Only pass-order is supported for now">muted</span>
                 </label>
-                <label className="checkbox-label muted-option">
+                <label className="checkbox-label muted-option" title="Only countdown is supported for now">
                   <select disabled className="settings-dropdown">
                     <option>countdown</option>
                   </select>
-                  <span className="muted-tooltip" title="Only countdown is supported for now">muted</span>
                 </label>
               </div>
             </div>
@@ -472,7 +479,7 @@ function NewRoom() {
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, pos)}
               >
-                <span className="drag-handle" title="Drag to reorder">&#9663;</span>
+                <span className="drag-handle" title="Drag to reorder">&#x283F;</span>
                 <div className="player-dot" style={{ background: p.color }} />
 
                 {editingPlayer === pIdx ? (
@@ -534,6 +541,8 @@ function GamePage() {
   const prevActiveRef = useRef(null);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editName, setEditName] = useState('');
+  const [showJoinInfo, setShowJoinInfo] = useState(false);
+  const [copyState, setCopyState] = useState('idle');
 
   useEffect(() => {
     const s = socket.current;
@@ -637,6 +646,33 @@ function GamePage() {
               : 'Paused — press Resume to continue'}
           </div>
         )}
+
+        <div className="collapsible-section">
+          <button className="collapsible-toggle" onClick={() => setShowJoinInfo(!showJoinInfo)}>
+            <span>How to join</span>
+            <span className={`chevron ${showJoinInfo ? 'open' : ''}`}>&#9662;</span>
+          </button>
+          {showJoinInfo && (
+            <div className="collapsible-content">
+              <div className="share-section">
+                <div className="share-link-row" onClick={() => {
+                  copyToClipboard(`${window.location.origin}/room/${code}`).then(ok => {
+                    setCopyState(ok ? 'copied' : 'failed');
+                    setTimeout(() => setCopyState('idle'), 2000);
+                  });
+                }}>
+                  <span className="share-link-text">{`${window.location.origin}/room/${code}`}</span>
+                  <span className="copy-glyph" title="Copy link">&#128203;</span>
+                  {copyState === 'copied' && <span className="copy-feedback copied">Copied!</span>}
+                  {copyState === 'failed' && <span className="copy-feedback failed">Failed</span>}
+                </div>
+                <div className="qr-code">
+                  <QRCodeSVG value={`${window.location.origin}/room/${code}`} size={128} bgColor="#16213e" fgColor="#eee" />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="turn-order">
           {state.turnOrder.map((pIdx) => (
@@ -808,9 +844,25 @@ function GameOverPage() {
     dragIndexRef.current = idx;
     e.dataTransfer.effectAllowed = 'move';
     e.currentTarget.style.opacity = '0.4';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    e.dataTransfer.setDragImage(e.currentTarget, offsetX, offsetY);
   }, []);
-  const handleDragEnd = useCallback((e) => { e.currentTarget.style.opacity = '1'; dragIndexRef.current = null; }, []);
-  const handleDragOver = useCallback((e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
+  const handleDragEnd = useCallback((e) => {
+    e.currentTarget.style.opacity = '1';
+    dragIndexRef.current = null;
+    document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
+  }, []);
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const slot = e.currentTarget.closest('.player-slot');
+    if (slot && !slot.classList.contains('drag-over')) {
+      document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
+      slot.classList.add('drag-over');
+    }
+  }, []);
   const handleDrop = useCallback((e, dropIdx) => {
     e.preventDefault();
     const dragIdx = dragIndexRef.current;
@@ -857,7 +909,7 @@ function GameOverPage() {
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, pos)}
                   >
-                    <span className="drag-handle" title="Drag to reorder">&#9663;</span>
+                <span className="drag-handle" title="Drag to reorder">&#x283F;</span>
                     <span style={{ fontFamily: 'monospace', opacity: 0.6 }}>{pos + 1}.</span>
                     <div className="player-dot" style={{ background: p.color }} />
                     <span>{p.name}</span>
