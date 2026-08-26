@@ -750,18 +750,16 @@ function GamePage() {
   useEffect(() => { setArmed(null); setDisconnectedPlayer(null); }, [state?.phase]);
 
   const handleEndTurn = useCallback((i) => {
-    const isDisconnected = state?.players[i] && !state.players[i].connected;
-    if (i === playerIndex || isDisconnected) { setArmed(null); endTurn(); return; }
+    if (i === playerIndex) { setArmed(null); endTurn(); return; }
     if (armed && armed.index === i && armed.action === 'end') { setArmed(null); endTurn(); return; }
     setArmed({ index: i, action: 'end' });
-  }, [playerIndex, armed, endTurn, state]);
+  }, [playerIndex, armed, endTurn]);
 
   const handlePass = useCallback((i) => {
-    const isDisconnected = state?.players[i] && !state.players[i].connected;
-    if (i === playerIndex || isDisconnected) { setArmed(null); pass(i); return; }
+    if (i === playerIndex) { setArmed(null); pass(i); return; }
     if (armed && armed.index === i && armed.action === 'pass') { setArmed(null); pass(i); return; }
     setArmed({ index: i, action: 'pass' });
-  }, [playerIndex, armed, pass, state]);
+  }, [playerIndex, armed, pass]);
 
   const handleUnpass = useCallback((i) => {
     if (i === playerIndex) { setArmed(null); unpass(i); return; }
