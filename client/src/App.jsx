@@ -6,7 +6,7 @@ import { io } from 'socket.io-client';
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
   ? 'http://localhost:3002'
-  : `${window.location.protocol}//${window.location.hostname}:3002`;
+  : window.location.origin;
 
 function getDeviceId() {
   let id = localStorage.getItem('mcc-device-id');
