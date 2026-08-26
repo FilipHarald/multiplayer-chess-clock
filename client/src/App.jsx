@@ -364,7 +364,7 @@ function NewRoom() {
     <div className="app">
       <div className="waiting">
         <div className="room-code-header">
-          <h2>{code}</h2>
+          <h2>New Room</h2>
         </div>
 
         {/* How to join - collapsible, default closed */}
@@ -376,12 +376,11 @@ function NewRoom() {
           {showJoinInfo && (
             <div className="collapsible-content">
               <div className="share-section">
-                <div className="share-link" onClick={handleCopyLink}>
-                  {shareLink}
-                  <br />
-                  <small style={{ color: copyState === 'copied' ? '#4ade80' : copyState === 'failed' ? '#f87171' : '#888' }}>
-                    {copyState === 'copied' ? 'Copied!' : copyState === 'failed' ? 'Copy failed' : '(click to copy)'}
-                  </small>
+                <div className="share-link-row" onClick={handleCopyLink}>
+                  <span className="share-link-text">{shareLink}</span>
+                  <span className="copy-glyph" title="Copy link">&#128203;</span>
+                  {copyState === 'copied' && <span className="copy-feedback copied">Copied!</span>}
+                  {copyState === 'failed' && <span className="copy-feedback failed">Failed</span>}
                 </div>
                 <div className="qr-code">
                   <QRCodeSVG value={shareLink} size={128} bgColor="#16213e" fgColor="#eee" />
@@ -511,9 +510,14 @@ function NewRoom() {
                   <>
                     <span className="player-name-text">{p.name}</span>
                     <button className="btn-icon" title="Rename" onClick={() => handleStartEdit(pIdx)}>&#9998;</button>
-                    {canDelete && (
-                      <button className="btn-icon btn-delete" title="Remove player" onClick={() => handleRemovePlayer(pIdx)}>&#10005;</button>
-                    )}
+                    <button
+                      className={`btn-icon btn-delete ${!canDelete ? 'muted-delete' : ''}`}
+                      title={canDelete ? 'Remove player' : 'Cannot remove the first 2 players'}
+                      onClick={canDelete ? () => handleRemovePlayer(pIdx) : undefined}
+                      disabled={!canDelete}
+                    >
+                      &#10005;
+                    </button>
                   </>
                 )}
               </div>
@@ -521,9 +525,8 @@ function NewRoom() {
           })}
 
           {state.players.length < 10 && (
-            <div className="player-slot add-player-slot" onClick={handleAddPlayer}>
+            <div className="player-slot add-player-slot" onClick={handleAddPlayer} title="Click to add another player">
               <span className="add-player-icon">+</span>
-              <span className="add-player-text">Add Player</span>
             </div>
           )}
         </div>

@@ -191,6 +191,55 @@ body {
   cursor: pointer;
 }
 
+.share-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  width: 100%;
+}
+
+.share-link-row:hover {
+  background: #1a4080;
+}
+
+.share-link-text {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy-glyph {
+  font-size: 1rem;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.share-link-row:hover .copy-glyph {
+  opacity: 1;
+}
+
+.copy-feedback {
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.copy-feedback.copied {
+  color: #4ade80;
+}
+
+.copy-feedback.failed {
+  color: #f87171;
+}
+
 .share-section {
   display: flex;
   flex-direction: column;
@@ -373,6 +422,16 @@ body {
   background: rgba(233, 69, 96, 0.12);
 }
 
+.btn-icon.btn-delete.muted-delete {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.btn-icon.btn-delete.muted-delete:hover {
+  color: var(--text-secondary);
+  background: none;
+}
+
 .btn-save {
   background: var(--accent);
   color: #fff;
@@ -413,10 +472,6 @@ body {
 .add-player-icon {
   font-size: 1.2rem;
   font-weight: 700;
-}
-
-.add-player-text {
-  font-size: 0.9rem;
 }
 
 /* ---------- Muted Options ---------- */
