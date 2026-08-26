@@ -855,30 +855,6 @@ function GamePage() {
           </div>
         )}
 
-        {state.phase === 'playing' && disconnectedPlayer && (
-          <div className="disconnect-banner">
-            {disconnectedPlayer.name} has left the room — waiting for reconnection
-            {state.paused && String(state.pausedBy).startsWith('disconnected:') && (
-              <div className="disconnect-actions">
-                {activeIdx === disconnectedPlayer.index && (
-                  <button
-                    className="btn-mini btn-end"
-                    onClick={() => handleEndTurn(disconnectedPlayer.index)}
-                  >
-                    {`End ${disconnectedPlayer.name}'s turn`}
-                  </button>
-                )}
-                <button
-                  className="btn-mini btn-pass"
-                  onClick={() => handlePass(disconnectedPlayer.index)}
-                >
-                  {`Pass ${disconnectedPlayer.name}`}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
         <div className="turn-order">
           {state.turnOrder.filter(pIdx => state.players[pIdx]?.connected).map((pIdx, i) => (
             <div
@@ -992,6 +968,52 @@ function GamePage() {
                       : isMe
                         ? 'Pass'
                         : `Pass ${p.name}`}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {state.phase === 'playing' && state.players.filter(p => !p.connected).map((p) => {
+          const origIdx = state.players.indexOf(p);
+          const isActive = activeIdx === origIdx;
+          const isPausedByDisconnect = state.paused && String(state.pausedBy).startsWith('disconnected:');
+
+          let cardClass = 'player-card disconnected-card';
+          if (isActive) cardClass += ' active';
+
+          return (
+            <div key={origIdx} className={cardClass} style={{ '--player-color': p.color }}>
+              <div className="player-info">
+                <div className="player-name" style={{ color: p.color }}>
+                  {p.name} <span style={{ fontSize: '0.7em', opacity: 0.6 }}>(disconnected)</span>
+                </div>
+                <div className="player-status">
+                  {isActive ? (
+                    <span style={{ color: p.color }}>Active</span>
+                  ) : (
+                    <span>Passed</span>
+                  )}
+                </div>
+              </div>
+              {isPausedByDisconnect && (
+                <div className="card-actions" onClick={(e) => e.stopPropagation()}>
+                  {isActive && (
+                    <button
+                      className="btn-mini btn-end"
+                      title={`End ${p.name}'s turn`}
+                      onClick={() => handleEndTurn(origIdx)}
+                    >
+                      {`End ${p.name}'s turn`}
+                    </button>
+                  )}
+                  <button
+                    className="btn-mini btn-pass"
+                    title={`Pass ${p.name}`}
+                    onClick={() => handlePass(origIdx)}
+                  >
+                    {`Pass ${p.name}`}
                   </button>
                 </div>
               )}
