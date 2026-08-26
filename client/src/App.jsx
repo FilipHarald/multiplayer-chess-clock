@@ -981,7 +981,6 @@ function GamePage() {
           const hasPassed = state.passOrder.includes(origIdx);
           const passPosition = state.passOrder.indexOf(origIdx);
           const timer = timers[origIdx] ?? p.timerMs;
-          const isPausedByDisconnect = state.paused && String(state.pausedBy).startsWith('disconnected:');
 
           let cardClass = 'player-card disconnected-card';
           if (isActive) cardClass += ' active';
@@ -1006,7 +1005,7 @@ function GamePage() {
               <div className="player-timer" style={{ opacity: 0.5 }}>
                 {formatTime(timer)}
               </div>
-              {isPausedByDisconnect && (
+              {!hasPassed && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                   {isActive && (
                     <button
