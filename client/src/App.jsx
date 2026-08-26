@@ -282,8 +282,7 @@ function NewRoom() {
   const [copyState, setCopyState] = useState('idle');
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editName, setEditName] = useState('');
-  const [editingTime, setEditingTime] = useState(false);
-  const [timeDraft, setTimeDraft] = useState('');
+  
   const dragIndexRef = useRef(null);
 
   const handleCopyLink = useCallback(() => {
@@ -334,19 +333,6 @@ function NewRoom() {
   const handleAddPlayer = useCallback(() => socket.current?.emit('add-player'), [socket]);
   const handleRemovePlayer = useCallback((pIdx) => socket.current?.emit('remove-player', { index: pIdx }), [socket]);
 
-  const handleStartTimeEdit = useCallback(() => {
-    setEditingTime(true);
-    setTimeDraft(String(state?.minutesPerPlayer || 60));
-  }, [state]);
-
-  const handleSaveTime = useCallback(() => {
-    const val = parseInt(timeDraft, 10);
-    if (val >= 1 && val <= 999) {
-      socket.current?.emit('update-time', { minutesPerPlayer: val });
-    }
-    setEditingTime(false);
-  }, [socket, timeDraft]);
-
   if (!state) {
     return (
       <div className="app">
@@ -394,26 +380,22 @@ function NewRoom() {
         <div className="time-info">
           <div className="time-info-row">
             <span>Time per player:</span>
-            {editingTime ? (
-              <div className="time-edit-row">
-                <input
-                  type="number"
-                  className="time-info-input"
-                  value={timeDraft}
-                  onChange={e => setTimeDraft(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSaveTime()}
-                  min={1}
-                  max={999}
-                  autoFocus
-                />
-                <span>min</span>
-                <button className="btn-mini btn-save" onClick={handleSaveTime}>&#10003;</button>
-              </div>
-            ) : (
-              <strong className="time-editable" onClick={handleStartTimeEdit} title="Click to edit">
-                {minutesPerPlayer} min &#9998;
-              </strong>
-            )}
+            <div className="time-edit-row">
+              <input
+                type="number"
+                className="time-info-input"
+                value={minutesPerPlayer}
+                onChange={e => {
+                  const val = parseInt(e.target.value, 10);
+                  if (val >= 1 && val <= 999) {
+                    socket.current?.emit('update-time', { minutesPerPlayer: val });
+                  }
+                }}
+                min={1}
+                max={999}
+              />
+              <span>min</span>
+            </div>
           </div>
           <div className="time-info-row">
             <span>Total max time:</span>
