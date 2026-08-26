@@ -978,10 +978,14 @@ function GamePage() {
         {state.phase === 'playing' && state.players.filter(p => !p.connected).map((p) => {
           const origIdx = state.players.indexOf(p);
           const isActive = activeIdx === origIdx;
+          const hasPassed = state.passOrder.includes(origIdx);
+          const passPosition = state.passOrder.indexOf(origIdx);
+          const timer = timers[origIdx] ?? p.timerMs;
           const isPausedByDisconnect = state.paused && String(state.pausedBy).startsWith('disconnected:');
 
           let cardClass = 'player-card disconnected-card';
           if (isActive) cardClass += ' active';
+          if (hasPassed) cardClass += ' passed';
 
           return (
             <div key={origIdx} className={cardClass} style={{ '--player-color': p.color }}>
@@ -990,12 +994,17 @@ function GamePage() {
                   {p.name} <span style={{ fontSize: '0.7em', opacity: 0.6 }}>(disconnected)</span>
                 </div>
                 <div className="player-status">
-                  {isActive ? (
+                  {hasPassed ? (
+                    <span className="pass-badge">Passed #{passPosition + 1}</span>
+                  ) : isActive ? (
                     <span style={{ color: p.color }}>Active</span>
                   ) : (
-                    <span>Passed</span>
+                    <span>Waiting</span>
                   )}
                 </div>
+              </div>
+              <div className="player-timer" style={{ opacity: 0.5 }}>
+                {formatTime(timer)}
               </div>
               {isPausedByDisconnect && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
