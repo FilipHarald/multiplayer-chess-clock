@@ -697,6 +697,19 @@ body {
   opacity: 1;
 }
 
+@media (pointer: coarse) {
+  .btn-rename {
+    opacity: 0.6;
+  }
+  .player-card:hover .btn-rename,
+  .player-card:hover .btn-rename:hover {
+    opacity: 0.6;
+  }
+  .btn-rename:active {
+    opacity: 1;
+  }
+}
+
 .player-status {
   font-size: 0.75rem;
   color: var(--text-secondary);
