@@ -979,10 +979,12 @@ function GamePage() {
           const hasPassed = state.passOrder.includes(origIdx);
           const passPosition = state.passOrder.indexOf(origIdx);
           const timer = timers[origIdx] ?? p.timerMs;
+          const armedHere = armed && armed.index === origIdx;
 
           let cardClass = 'player-card disconnected-card';
           if (isActive) cardClass += ' active';
           if (hasPassed) cardClass += ' passed';
+          if (armedHere) cardClass += ' armed-target';
 
           return (
             <div key={origIdx} className={cardClass} style={{ '--player-color': p.color }}>
@@ -1007,19 +1009,23 @@ function GamePage() {
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                   {isActive && (
                     <button
-                      className="btn-mini btn-end"
+                      className={`btn-mini btn-end ${armedHere && armed.action === 'end' ? 'armed' : ''}`}
                       title={`End ${p.name}'s turn`}
                       onClick={() => handleEndTurn(origIdx)}
                     >
-                      {`End ${p.name}'s turn`}
+                      {armedHere && armed.action === 'end'
+                        ? `Confirm: end ${p.name}'s turn`
+                        : `End ${p.name}'s turn`}
                     </button>
                   )}
                   <button
-                    className="btn-mini btn-pass"
+                    className={`btn-mini btn-pass ${armedHere && armed.action === 'pass' ? 'armed' : ''}`}
                     title={`Pass ${p.name}`}
                     onClick={() => handlePass(origIdx)}
                   >
-                    {`Pass ${p.name}`}
+                    {armedHere && armed.action === 'pass'
+                      ? `Confirm: pass ${p.name}`
+                      : `Pass ${p.name}`}
                   </button>
                 </div>
               )}
