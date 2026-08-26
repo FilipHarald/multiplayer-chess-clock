@@ -428,11 +428,10 @@ io.on('connection', (socket) => {
     if (senderIdx === -1 || !room.players[senderIdx].connected) return;
 
     // A manual pause is a hard stop: no turn actions until resumed.
-    // Exception: allow end-turn when active player is disconnected.
+    // Exception: allow end-turn when active player has joined but is disconnected.
     const activePlayer = room.players[room.turnOrder[room.currentTurnIndex]];
-    const isActiveDisconnected = activePlayer && !activePlayer.connected;
-    const isDisconnectPaused = room.paused && String(room.pausedBy).startsWith('disconnected:');
-    if (room.paused && room.pausedBy !== 'round-start' && !(isDisconnectPaused && isActiveDisconnected)) return;
+    const isActiveDisconnectedJoined = activePlayer && !activePlayer.connected && activePlayer.hasJoined;
+    if (room.paused && room.pausedBy !== 'round-start' && !isActiveDisconnectedJoined) return;
 
     if (room.pausedBy === 'round-start') {
       room.paused = false;
@@ -455,12 +454,11 @@ io.on('connection', (socket) => {
     const targetIdx = Number.isInteger(index) ? index : senderIdx;
     const target = room.players[targetIdx];
     if (!target || room.passOrder.includes(targetIdx)) return;
-    const isTargetDisconnectPaused = room.paused && String(room.pausedBy).startsWith('disconnected:');
-    if (!target.connected && !isTargetDisconnectPaused) return;
+    if (!target.connected && !target.hasJoined) return;
 
     // A manual pause is a hard stop: no turn actions until resumed.
-    // Exception: allow pass/end-turn for disconnected player during disconnect pause.
-    if (room.paused && room.pausedBy !== 'round-start' && !isTargetDisconnectPaused) return;
+    // Exception: allow pass/end-turn for disconnected player who has joined.
+    if (room.paused && room.pausedBy !== 'round-start' && !(!target.connected && target.hasJoined)) return;
 
     if (room.pausedBy === 'round-start') {
       room.paused = false;
