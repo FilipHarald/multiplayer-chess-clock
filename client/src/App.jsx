@@ -523,36 +523,42 @@ function WaitingRoom() {
           </div>
         )}
 
-        {isCreator && (
-          <div className="settings-section">
-            <div className="checkbox-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={state.settings?.allowAnyoneToStart ?? true}
-                  onChange={e => socket.current?.emit('update-settings', { allowAnyoneToStart: e.target.checked })}
-                />
-                Allow anyone to start the game
-              </label>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={state.settings?.allowAnyoneToPause ?? true}
-                  onChange={e => socket.current?.emit('update-settings', { allowAnyoneToPause: e.target.checked })}
-                />
-                Allow anyone to pause the clock
-              </label>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={state.settings?.public ?? true}
-                  onChange={e => socket.current?.emit('update-settings', { public: e.target.checked })}
-                />
-                List publicly (visible on home page)
-              </label>
-            </div>
+        <div className="settings-section">
+          <div className="checkbox-group">
+            <label className={`checkbox-label ${!isCreator ? 'read-only' : ''}`}>
+              <input
+                type="checkbox"
+                checked={state.settings?.allowAnyoneToStart ?? true}
+                disabled={!isCreator}
+                onChange={e => socket.current?.emit('update-settings', { allowAnyoneToStart: e.target.checked })}
+              />
+              Allow anyone to start the game
+            </label>
+            <label className={`checkbox-label ${!isCreator ? 'read-only' : ''}`}>
+              <input
+                type="checkbox"
+                checked={state.settings?.allowAnyoneToPause ?? true}
+                disabled={!isCreator}
+                onChange={e => socket.current?.emit('update-settings', { allowAnyoneToPause: e.target.checked })}
+              />
+              Allow anyone to pause the clock
+            </label>
+            <label className={`checkbox-label ${!isCreator ? 'read-only' : ''}`}>
+              <input
+                type="checkbox"
+                checked={state.settings?.public ?? true}
+                disabled={!isCreator}
+                onChange={e => socket.current?.emit('update-settings', { public: e.target.checked })}
+              />
+              List publicly (visible on home page)
+            </label>
           </div>
-        )}
+          {!isCreator && (
+            <p style={{ fontSize: '0.75em', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Only the host can change settings
+            </p>
+          )}
+        </div>
 
         {canIShowStart ? (
           <button className="btn btn-primary" onClick={startGame} disabled={!canStart}>
@@ -603,6 +609,9 @@ function GamePage() {
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [disconnectedPlayer, setDisconnectedPlayer] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [muted, setMuted] = useState(() => localStorage.getItem('mcc-muted') === 'true');
+  const mutedRef = useRef(muted);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
 
   useEffect(() => {
     const s = socket.current;
@@ -630,7 +639,7 @@ function GamePage() {
       const myIdx = s.myIndex ?? myIndexRef.current;
       myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
-      if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
+      if (!mutedRef.current && nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
       prevActiveRef.current = s.activePlayerIndex;
       setIsMyTurn(nowMyTurn);
     };
@@ -649,7 +658,7 @@ function GamePage() {
       const myIdx = s.myIndex ?? myIndexRef.current;
       myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
-      if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
+      if (!mutedRef.current && nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
       prevActiveRef.current = s.activePlayerIndex;
       setIsMyTurn(nowMyTurn);
     };
@@ -658,7 +667,7 @@ function GamePage() {
       const myIdx = s.myIndex ?? myIndexRef.current;
       myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
-      if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
+      if (!mutedRef.current && nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
       prevActiveRef.current = s.activePlayerIndex;
       setIsMyTurn(nowMyTurn);
     };
@@ -667,7 +676,7 @@ function GamePage() {
       const myIdx = s.myIndex ?? myIndexRef.current;
       myIndexRef.current = myIdx;
       const nowMyTurn = s.activePlayerIndex === myIdx;
-      if (nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
+      if (!mutedRef.current && nowMyTurn && prevActiveRef.current !== s.activePlayerIndex) playTurnSound();
       prevActiveRef.current = s.activePlayerIndex;
       setIsMyTurn(nowMyTurn);
     };
@@ -801,45 +810,58 @@ function GamePage() {
               {state.paused ? 'Resume' : 'Pause'}
             </button>
           )}
-          {isCreator && (
-            <button
-              className="btn btn-small btn-settings"
-              onClick={() => setShowSettings(!showSettings)}
-              title="Game settings"
-            >
-              {showSettings ? 'Hide Settings' : 'Settings'}
-            </button>
-          )}
+          <button
+            className="btn btn-small btn-settings"
+            onClick={() => setShowSettings(!showSettings)}
+            title="Game settings"
+          >
+            {showSettings ? 'Hide Settings' : 'Settings'}
+          </button>
+          <button
+            className="btn btn-small btn-mute"
+            onClick={() => { const next = !muted; setMuted(next); localStorage.setItem('mcc-muted', String(next)); }}
+            title={muted ? 'Unmute notifications' : 'Mute turn notifications'}
+          >
+            {muted ? '🔇' : '🔔'}
+          </button>
         </div>
 
-        {isCreator && showSettings && (
+        {showSettings && (
           <div className="settings-section">
             <div className="checkbox-group">
-              <label className="checkbox-label">
+              <label className={`checkbox-label ${!isCreator ? 'read-only' : ''}`}>
                 <input
                   type="checkbox"
                   checked={state.settings?.allowAnyoneToStart ?? true}
+                  disabled={!isCreator}
                   onChange={e => socket.current?.emit('update-settings', { allowAnyoneToStart: e.target.checked })}
                 />
                 Allow anyone to start the game
               </label>
-              <label className="checkbox-label">
+              <label className={`checkbox-label ${!isCreator ? 'read-only' : ''}`}>
                 <input
                   type="checkbox"
                   checked={state.settings?.allowAnyoneToPause ?? true}
+                  disabled={!isCreator}
                   onChange={e => socket.current?.emit('update-settings', { allowAnyoneToPause: e.target.checked })}
                 />
                 Allow anyone to pause the clock
               </label>
-              <label className="checkbox-label">
+              <label className={`checkbox-label ${!isCreator ? 'read-only' : ''}`}>
                 <input
                   type="checkbox"
                   checked={state.settings?.public ?? true}
+                  disabled={!isCreator}
                   onChange={e => socket.current?.emit('update-settings', { public: e.target.checked })}
                 />
                 List publicly (visible on home page)
               </label>
             </div>
+            {!isCreator && (
+              <p style={{ fontSize: '0.75em', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Only the host can change settings
+              </p>
+            )}
           </div>
         )}
 

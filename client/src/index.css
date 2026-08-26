@@ -270,9 +270,24 @@ body {
   width: 100%;
 }
 
+.checkbox-label.read-only {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-label.read-only input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
 .btn-settings {
   margin-left: auto;
   font-size: 0.85rem;
+}
+
+.btn-mute {
+  font-size: 1rem;
+  padding: 4px 8px;
+  min-width: 0;
 }
 
 /* ---------- Time Info ---------- */
