@@ -95,6 +95,7 @@ function createRoom(playerCount, minutesPerPlayer, settings = {}) {
     color: PLAYER_COLORS[i % PLAYER_COLORS.length],
     timerMs: minutesPerPlayer * 60 * 1000,
     connected: false,
+    hasJoined: false,
   }));
 
   const room = {
@@ -232,6 +233,7 @@ function serializeState(room, forSocketId) {
       color: p.color,
       timerMs: p.timerMs,
       connected: p.connected,
+      hasJoined: p.hasJoined,
     })),
     waitingOrder: room.waitingOrder,
     turnOrder: room.turnOrder,
@@ -285,6 +287,7 @@ io.on('connection', (socket) => {
         room.players[existingIdx].id = socket.id;
         const wasDisconnected = !room.players[existingIdx].connected;
         room.players[existingIdx].connected = true;
+        room.players[existingIdx].hasJoined = true;
         if (name) room.players[existingIdx].name = name;
         socket.join(code);
         currentRoom = code;
@@ -309,6 +312,7 @@ io.on('connection', (socket) => {
       room.players[0].deviceId = deviceId || null;
       const wasDisconnected = !room.players[0].connected;
       room.players[0].connected = true;
+      room.players[0].hasJoined = true;
       room.players[0].name = name;
       socket.join(code);
       currentRoom = code;
@@ -333,6 +337,7 @@ io.on('connection', (socket) => {
     room.players[freeSlot].id = socket.id;
     room.players[freeSlot].deviceId = deviceId || null;
     room.players[freeSlot].connected = true;
+    room.players[freeSlot].hasJoined = true;
     if (name) room.players[freeSlot].name = name;
 
     socket.join(code);
@@ -540,6 +545,8 @@ io.on('connection', (socket) => {
     // lifted by the first turn action instead (see end-turn/pass below).
     room.paused = !room.paused;
     room.pausedBy = room.paused ? senderIdx : null;
+
+    if (!room.paused) startTimerTick(currentRoom);
 
     persistRoom(currentRoom);
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });

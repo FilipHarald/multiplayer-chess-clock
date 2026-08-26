@@ -975,7 +975,7 @@ function GamePage() {
           );
         })}
 
-        {state.phase === 'playing' && state.players.filter(p => !p.connected).map((p) => {
+        {state.phase === 'playing' && state.players.filter(p => !p.connected && p.hasJoined).map((p) => {
           const origIdx = state.players.indexOf(p);
           const isActive = activeIdx === origIdx;
           const hasPassed = state.passOrder.includes(origIdx);
