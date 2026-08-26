@@ -38,6 +38,14 @@ body {
   color: var(--accent);
 }
 
+.home-description {
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0 0 8px;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
 .setup-form {
   display: flex;
   flex-direction: column;
@@ -262,6 +270,186 @@ body {
   outline: none;
 }
 
+/* ---------- Room Code Header ---------- */
+
+.room-code-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.room-code-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  background: var(--bg-card);
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-family: monospace;
+  display: inline-block;
+}
+
+/* ---------- Collapsible Sections ---------- */
+
+.collapsible-section {
+  width: 100%;
+}
+
+.collapsible-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.collapsible-toggle:hover {
+  border-color: #555;
+}
+
+.chevron {
+  font-size: 0.8rem;
+  transition: transform 0.2s;
+}
+
+.chevron.open {
+  transform: rotate(180deg);
+}
+
+.collapsible-content {
+  padding: 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---------- Player Edit Inline ---------- */
+
+.player-edit-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.player-name-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 4px 8px;
+  font-size: 0.95rem;
+  flex: 1;
+  outline: none;
+}
+
+/* ---------- Icon Buttons ---------- */
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-icon:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-icon.btn-delete:hover {
+  color: var(--accent);
+  background: rgba(233, 69, 96, 0.12);
+}
+
+.btn-save {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+/* ---------- Player Name Text ---------- */
+
+.player-name-text {
+  flex: 1;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Add Player Slot ---------- */
+
+.add-player-slot {
+  border: 1px dashed #444;
+  cursor: pointer;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.add-player-slot:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.add-player-icon {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.add-player-text {
+  font-size: 0.9rem;
+}
+
+/* ---------- Muted Options ---------- */
+
+.muted-option {
+  opacity: 0.5;
+  cursor: default;
+  position: relative;
+}
+
+.muted-tooltip {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-left: 6px;
+}
+
+.settings-dropdown {
+  background: var(--bg-primary);
+  border: 1px solid #333;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  margin-left: 8px;
+}
+
+/* ---------- Start Game Button ---------- */
+
+.btn-start-game {
+  margin-top: 8px;
+}
+
 .settings-section {
   background: var(--bg-secondary);
   border: 1px solid #444;
@@ -282,12 +470,6 @@ body {
 .btn-settings {
   margin-left: auto;
   font-size: 0.85rem;
-}
-
-.btn-mute {
-  font-size: 1rem;
-  padding: 4px 8px;
-  min-width: 0;
 }
 
 /* ---------- Time Info ---------- */
@@ -319,6 +501,21 @@ body {
   color: var(--text-primary);
   font-size: 0.9rem;
   text-align: center;
+}
+
+.time-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.time-editable {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.time-editable:hover {
+  color: var(--accent);
 }
 
 /* ---------- Game ---------- */
@@ -521,19 +718,6 @@ body {
 .btn-mini.btn-end {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-.btn-mini.btn-end.armed,
-.btn-mini.btn-pass.armed {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-  animation: pulse 1s infinite;
-}
-
-.player-card.armed-target {
-  border-color: #f39c12;
-  box-shadow: 0 0 20px rgba(243, 156, 18, 0.35);
 }
 
 .paused-banner {
@@ -812,9 +996,18 @@ body {
   letter-spacing: 0.1em;
 }
 
-.public-room-players {
+.public-room-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 0.8rem;
   color: var(--text-secondary);
+}
+
+.public-room-phase {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  opacity: 0.6;
 }
 
 /* ---------- My turn active background ---------- */
@@ -909,12 +1102,7 @@ body {
   border-color: #2ecc71;
 }
 
-.btn-unpass.armed {
-  background: #2ecc71;
-  border-color: #2ecc71;
-  color: white;
-  animation: pulse 1s infinite;
-}
+
 
 .version-footer {
   margin-top: 1.5rem;

@@ -35,7 +35,7 @@ function loadRooms() {
     try {
       const room = JSON.parse(row.data);
       room.timerInterval = null;
-      room.pausedBy = room.pausedBy ?? null;
+      room.devices = [];
       loaded.push(room);
     } catch { /* skip corrupt row */ }
   }
@@ -86,24 +86,21 @@ const PLAYER_COLORS = [
 
 // ---------- helpers ----------
 
-function createRoom(playerCount, minutesPerPlayer, settings = {}) {
+function createRoom(minutesPerPlayer, settings = {}) {
   const code = nanoid();
-  const players = Array.from({ length: playerCount }, (_, i) => ({
-    id: null,
-    deviceId: null,
+  const players = Array.from({ length: 2 }, (_, i) => ({
     name: `Player ${i + 1}`,
     color: PLAYER_COLORS[i % PLAYER_COLORS.length],
     timerMs: minutesPerPlayer * 60 * 1000,
-    connected: false,
-    hasJoined: false,
   }));
 
   const room = {
     code,
     players,
+    devices: [],
     minutesPerPlayer: minutesPerPlayer || 60,
-    waitingOrder: Array.from({ length: playerCount }, (_, i) => i),
-    turnOrder: Array.from({ length: playerCount }, (_, i) => i),
+    waitingOrder: [0, 1],
+    turnOrder: [0, 1],
     currentTurnIndex: 0,
     round: 1,
     passOrder: [],
@@ -112,12 +109,8 @@ function createRoom(playerCount, minutesPerPlayer, settings = {}) {
     paused: false,
     pausedBy: null,
     createdAt: Date.now(),
-    createdBy: null,
-    creatorName: null,
     settings: {
-      allowAnyoneToStart: settings.allowAnyoneToStart ?? false,
-      allowAnyoneToPause: settings.allowAnyoneToPause ?? false,
-      public: settings.public ?? false,
+      public: settings.public ?? true,
     },
   };
 
@@ -183,13 +176,11 @@ function advanceTurn(code) {
   });
 }
 
-// A round ends only once every connected player has passed — the last player
-// keeps taking turns (their End Turn cycles back to themselves) until they pass too.
 function checkRoundOver(code) {
   const room = rooms.get(code);
   if (!room) return false;
 
-  const stillInRound = room.players.filter((p, i) => p.connected && !room.passOrder.includes(i));
+  const stillInRound = room.players.filter((_, i) => !room.passOrder.includes(i));
 
   if (stillInRound.length === 0) {
     stopTimerTick(code);
@@ -219,12 +210,7 @@ function startNextRound(code) {
   io.to(code).emit('new-round', { state: serializeState(room) });
 }
 
-function serializeState(room, forSocketId) {
-  let playerIdx = null;
-  if (forSocketId) {
-    playerIdx = room.players.findIndex((p) => p.id === forSocketId);
-    if (playerIdx === -1) playerIdx = null;
-  }
+function serializeState(room) {
   return {
     code: room.code,
     players: room.players.map((p, i) => ({
@@ -232,9 +218,8 @@ function serializeState(room, forSocketId) {
       name: p.name,
       color: p.color,
       timerMs: p.timerMs,
-      connected: p.connected,
-      hasJoined: p.hasJoined,
     })),
+    devices: room.devices.map(d => ({ id: d.deviceId, name: d.name })),
     waitingOrder: room.waitingOrder,
     turnOrder: room.turnOrder,
     currentTurnIndex: room.currentTurnIndex,
@@ -244,10 +229,8 @@ function serializeState(room, forSocketId) {
     phase: room.phase,
     paused: room.paused,
     pausedBy: room.pausedBy,
-    createdBy: room.createdBy,
     settings: room.settings,
     minutesPerPlayer: room.minutesPerPlayer,
-    myIndex: playerIdx,
   };
 }
 
@@ -255,107 +238,99 @@ function serializeState(room, forSocketId) {
 
 io.on('connection', (socket) => {
   let currentRoom = null;
-  let playerIndex = null;
 
-  socket.on('create-room', ({ playerCount, minutesPerPlayer, settings, name, deviceId }, cb) => {
-    const room = createRoom(playerCount || 3, minutesPerPlayer || 60, settings);
+  socket.on('create-room', ({ minutesPerPlayer, settings, name, deviceId }, cb) => {
+    const room = createRoom(minutesPerPlayer || 60, settings);
     socket.join(room.code);
     currentRoom = room.code;
-    playerIndex = 0;
-    room.createdBy = socket.id;
-    room.creatorName = name || 'Player 1';
-    room.players[0].id = socket.id;
-    room.players[0].deviceId = deviceId || null;
-    room.players[0].connected = true;
-    if (name) room.players[0].name = name;
+
+    // Add creator as first device
+    room.devices.push({ socketId: socket.id, deviceId: deviceId || socket.id, name: name || 'Device 1' });
     persistRoom(room.code);
-    cb({ state: serializeState(room), playerIndex: 0 });
+    cb({ state: serializeState(room) });
   });
 
   socket.on('join-room', ({ code, name, deviceId }, cb) => {
     const room = rooms.get(code);
     if (!room) return cb({ error: 'Room not found' });
 
-    // Check if this device is already in the room (same device, new socket).
-    // Allowed in any phase: this is how players re-enter after a page refresh
-    // or when navigating from the lobby into the started game.
-    if (deviceId) {
-      const existingIdx = room.players.findIndex((p) => p.deviceId === deviceId);
-      if (existingIdx !== -1) {
-        // Device already has a slot — reassign this socket to that slot
-        const oldSocketId = room.players[existingIdx].id;
-        room.players[existingIdx].id = socket.id;
-        const wasDisconnected = !room.players[existingIdx].connected;
-        room.players[existingIdx].connected = true;
-        room.players[existingIdx].hasJoined = true;
-        if (name) room.players[existingIdx].name = name;
-        socket.join(code);
-        currentRoom = code;
-        playerIndex = existingIdx;
-        persistRoom(code);
-
-        io.to(code).emit(wasDisconnected ? 'player-reconnected' : 'player-joined', {
-          playerIndex: existingIdx,
-          playerName: room.players[existingIdx].name,
-          state: serializeState(room),
-        });
-        cb({ state: serializeState(room), playerIndex: existingIdx });
-        return;
-      }
-    }
-
-    // Check if this is the creator rejoining (name matches creatorName and slot 0 is empty)
-    const isCreatorRejoin = name && room.creatorName && name === room.creatorName && !room.players[0].connected;
-
-    if (isCreatorRejoin) {
-      room.players[0].id = socket.id;
-      room.players[0].deviceId = deviceId || null;
-      const wasDisconnected = !room.players[0].connected;
-      room.players[0].connected = true;
-      room.players[0].hasJoined = true;
-      room.players[0].name = name;
+    // Check if device is already tracked (reconnect)
+    const existingDevice = room.devices.find(d => d.deviceId === deviceId);
+    if (existingDevice) {
+      existingDevice.socketId = socket.id;
+      if (name) existingDevice.name = name;
       socket.join(code);
       currentRoom = code;
-      playerIndex = 0;
       persistRoom(code);
-
-      io.to(code).emit(wasDisconnected ? 'player-reconnected' : 'player-joined', {
-        playerIndex: 0,
-        playerName: name,
-        state: serializeState(room),
-      });
-      cb({ state: serializeState(room), playerIndex: 0 });
+      io.to(code).emit('state-update', { state: serializeState(room) });
+      cb({ state: serializeState(room) });
       return;
     }
 
-    // Brand-new players (no existing slot) may only join before the game starts
-    if (room.phase === 'playing') return cb({ error: 'Game already in progress' });
-
-    const freeSlot = room.players.findIndex((p) => p.id === null);
-    if (freeSlot === -1) return cb({ error: 'Room is full' });
-
-    room.players[freeSlot].id = socket.id;
-    room.players[freeSlot].deviceId = deviceId || null;
-    room.players[freeSlot].connected = true;
-    room.players[freeSlot].hasJoined = true;
-    if (name) room.players[freeSlot].name = name;
-
+    // Add new device
+    room.devices.push({ socketId: socket.id, deviceId: deviceId || socket.id, name: name || `Device ${room.devices.length + 1}` });
     socket.join(code);
     currentRoom = code;
-    playerIndex = freeSlot;
-
     persistRoom(code);
-    io.to(code).emit('player-joined', { state: serializeState(room) });
-    cb({ state: serializeState(room), playerIndex: freeSlot });
+    io.to(code).emit('device-joined', { state: serializeState(room) });
+    cb({ state: serializeState(room) });
+  });
+
+  socket.on('set-device-name', ({ name }) => {
+    if (currentRoom === null) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+    const device = room.devices.find(d => d.socketId === socket.id);
+    if (device && typeof name === 'string' && name.trim()) {
+      device.name = name.trim().slice(0, 20);
+      persistRoom(currentRoom);
+      io.to(currentRoom).emit('state-update', { state: serializeState(room) });
+    }
   });
 
   socket.on('rename-player', ({ index, name }) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room) return;
-    // Use server-tracked playerIndex, not client-sent index
-    if (playerIndex === null) return;
-    room.players[playerIndex].name = name;
+    if (typeof index !== 'number' || index < 0 || index >= room.players.length) return;
+    if (typeof name !== 'string' || name.length > 30) return;
+    room.players[index].name = name.trim() || room.players[index].name;
+    persistRoom(currentRoom);
+    io.to(currentRoom).emit('state-update', { state: serializeState(room) });
+  });
+
+  socket.on('add-player', () => {
+    if (currentRoom === null) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+    if (room.phase !== 'lobby') return;
+    if (room.players.length >= 10) return;
+
+    const newIdx = room.players.length;
+    room.players.push({
+      name: `Player ${newIdx + 1}`,
+      color: PLAYER_COLORS[newIdx % PLAYER_COLORS.length],
+      timerMs: room.minutesPerPlayer * 60 * 1000,
+    });
+    room.waitingOrder.push(newIdx);
+
+    persistRoom(currentRoom);
+    io.to(currentRoom).emit('state-update', { state: serializeState(room) });
+  });
+
+  socket.on('remove-player', ({ index }) => {
+    if (currentRoom === null) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+    if (room.phase !== 'lobby') return;
+    if (typeof index !== 'number') return;
+    if (index < 2 || index >= room.players.length) return;
+
+    room.players.splice(index, 1);
+    room.waitingOrder = room.waitingOrder
+      .filter(i => i !== index)
+      .map(i => i > index ? i - 1 : i);
+
     persistRoom(currentRoom);
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
@@ -363,20 +338,24 @@ io.on('connection', (socket) => {
   socket.on('reorder-players', ({ order }) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
-    if (!room || room.phase !== 'lobby') return;
+    if (!room || (room.phase !== 'lobby' && room.phase !== 'round-over')) return;
 
-    // Only creator or allowAnyoneToStart may reorder
-    const isCreator = room.createdBy === socket.id;
-    if (!isCreator && !room.settings.allowAnyoneToStart) return;
-
-    // Validate: must be an array of valid player indices with no duplicates
     if (!Array.isArray(order)) return;
     const valid = new Set(room.players.map((_, i) => i));
-    if (order.length !== room.players.length) return;
+
+    if (room.phase === 'round-over') {
+      if (order.length !== room.players.length) return;
+    } else {
+      if (order.length !== room.players.length) return;
+    }
     if (!order.every((idx) => valid.has(idx))) return;
     if (new Set(order).size !== order.length) return;
 
-    room.waitingOrder = order;
+    if (room.phase === 'round-over') {
+      room.passOrder = order;
+    } else {
+      room.waitingOrder = order;
+    }
     persistRoom(currentRoom);
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
@@ -386,24 +365,9 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoom);
     if (!room) return;
     if (room.phase !== 'lobby') return;
+    if (room.players.length < 2) return;
 
-    // Permission check: creator or allowAnyoneToStart
-    const isCreator = room.createdBy === socket.id;
-    if (!isCreator && !room.settings.allowAnyoneToStart) return;
-
-    const connectedPlayers = room.players
-      .map((p, i) => ({ ...p, originalIndex: i }))
-      .filter((p) => p.connected);
-
-    if (connectedPlayers.length < 2) return;
-
-    // Use waitingOrder if available, otherwise fall back to connected order
-    const connectedIndices = new Set(connectedPlayers.map((p) => p.originalIndex));
-    const ordered = (room.waitingOrder || []).filter((idx) => connectedIndices.has(idx));
-    // Add any connected players not in waitingOrder (e.g. joined after order was set)
-    for (const idx of connectedIndices) {
-      if (!ordered.includes(idx)) ordered.push(idx);
-    }
+    const ordered = [...room.waitingOrder];
     room.turnOrder = ordered;
     room.currentTurnIndex = 0;
     room.phase = 'playing';
@@ -423,15 +387,8 @@ io.on('connection', (socket) => {
     if (!room || room.phase !== 'playing') return;
     if (room.turnOrder.length === 0) return;
 
-    // Any connected room member may end the turn of the active player
-    const senderIdx = room.players.findIndex((p) => p.id === socket.id);
-    if (senderIdx === -1 || !room.players[senderIdx].connected) return;
-
-    // A manual pause is a hard stop: no turn actions until resumed.
-    // Exception: allow end-turn when active player has joined but is disconnected.
-    const activePlayer = room.players[room.turnOrder[room.currentTurnIndex]];
-    const isActiveDisconnectedJoined = activePlayer && !activePlayer.connected && activePlayer.hasJoined;
-    if (room.paused && room.pausedBy !== 'round-start' && !isActiveDisconnectedJoined) return;
+    // Any device may end the turn
+    if (room.paused && room.pausedBy !== 'round-start') return;
 
     if (room.pausedBy === 'round-start') {
       room.paused = false;
@@ -447,18 +404,12 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoom);
     if (!room || room.phase !== 'playing') return;
 
-    // Any connected room member may pass for anyone; default is your own slot
-    const senderIdx = room.players.findIndex((p) => p.id === socket.id);
-    if (senderIdx === -1 || !room.players[senderIdx].connected) return;
-
-    const targetIdx = Number.isInteger(index) ? index : senderIdx;
+    // Any device may pass for any player
+    const targetIdx = Number.isInteger(index) ? index : 0;
     const target = room.players[targetIdx];
     if (!target || room.passOrder.includes(targetIdx)) return;
-    if (!target.connected && !target.hasJoined) return;
 
-    // A manual pause is a hard stop: no turn actions until resumed.
-    // Exception: allow pass/end-turn for disconnected player who has joined.
-    if (room.paused && room.pausedBy !== 'round-start' && !(!target.connected && target.hasJoined)) return;
+    if (room.paused && room.pausedBy !== 'round-start') return;
 
     if (room.pausedBy === 'round-start') {
       room.paused = false;
@@ -466,8 +417,6 @@ io.on('connection', (socket) => {
     }
     room.passOrder.push(targetIdx);
 
-    // Remove the passer from the turn rotation; keep currentTurnIndex pointing
-    // at the same position so the clock hands over to the next player.
     const orderPos = room.turnOrder.indexOf(targetIdx);
     if (orderPos !== -1) {
       room.turnOrder.splice(orderPos, 1);
@@ -493,18 +442,11 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoom);
     if (!room || room.phase !== 'playing') return;
 
-    const senderIdx = room.players.findIndex((p) => p.id === socket.id);
-    if (senderIdx === -1 || !room.players[senderIdx].connected) return;
-
-    const targetIdx = Number.isInteger(index) ? index : senderIdx;
+    const targetIdx = Number.isInteger(index) ? index : 0;
     const passPos = room.passOrder.indexOf(targetIdx);
     if (passPos === -1) return;
 
-    // Remove from passOrder
     room.passOrder.splice(passPos, 1);
-
-    // Re-add to turnOrder — insert after the current position so they play next
-    // or at end if currentTurnIndex is past the insertion point
     const insertAt = Math.min(room.currentTurnIndex + 1, room.turnOrder.length);
     room.turnOrder.splice(insertAt, 0, targetIdx);
 
@@ -520,10 +462,6 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoom);
     if (!room || (room.phase !== 'game-over' && room.phase !== 'round-over')) return;
 
-    // Permission: creator or allowAnyoneToStart
-    const isCreator = room.createdBy === socket.id;
-    if (!isCreator && !room.settings.allowAnyoneToStart) return;
-
     startNextRound(currentRoom);
   });
 
@@ -532,17 +470,8 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoom);
     if (!room || room.phase !== 'playing') return;
 
-    const senderIdx = room.players.findIndex((p) => p.id === socket.id);
-    if (senderIdx === -1 || !room.players[senderIdx].connected) return;
-
-    const isCreator = room.createdBy === socket.id;
-    const isPausedByDisconnect = room.paused && String(room.pausedBy).startsWith('disconnected:');
-    if (!isCreator && !room.settings.allowAnyoneToPause && !isPausedByDisconnect) return;
-
-    // A manual pause stays until resumed explicitly; a round-start pause is
-    // lifted by the first turn action instead (see end-turn/pass below).
     room.paused = !room.paused;
-    room.pausedBy = room.paused ? senderIdx : null;
+    room.pausedBy = room.paused ? 'manual' : null;
 
     if (!room.paused) startTimerTick(currentRoom);
 
@@ -556,10 +485,8 @@ io.on('connection', (socket) => {
     if (!room) return;
     if (room.phase !== 'lobby' && room.phase !== 'playing') return;
 
-    const isCreator = room.createdBy === socket.id;
-    if (!isCreator) return;
-
-    const allowed = ['allowAnyoneToStart', 'allowAnyoneToPause', 'public'];
+    // Any device can change settings
+    const allowed = ['public'];
     for (const key of allowed) {
       if (typeof settings[key] === 'boolean') {
         room.settings[key] = settings[key];
@@ -575,7 +502,6 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoom);
     if (!room) return;
     if (room.phase !== 'lobby') return;
-    if (room.createdBy !== socket.id) return;
     if (typeof minutesPerPlayer !== 'number' || minutesPerPlayer < 1 || minutesPerPlayer > 999) return;
 
     room.minutesPerPlayer = minutesPerPlayer;
@@ -596,25 +522,13 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const count = playerCount || room.players.length;
-    const minutes = minutesPerPlayer || room.players[0].timerMs / 60000;
+    const minutes = minutesPerPlayer || room.players[0]?.timerMs / 60000 || 60;
 
     room.players = Array.from({ length: count }, (_, i) => ({
-      id: null,
-      deviceId: null,
       name: `Player ${i + 1}`,
       color: PLAYER_COLORS[i % PLAYER_COLORS.length],
       timerMs: minutes * 60 * 1000,
-      connected: false,
     }));
-
-    const sockets = Array.from(io.sockets.adapter.rooms.get(currentRoom) || []);
-    sockets.forEach((sid) => {
-      const idx = room.players.findIndex((p) => p.id === null);
-      if (idx !== -1) {
-        room.players[idx].id = sid;
-        room.players[idx].connected = true;
-      }
-    });
 
     room.turnOrder = room.players.map((_, i) => i);
     room.waitingOrder = room.players.map((_, i) => i);
@@ -624,7 +538,6 @@ io.on('connection', (socket) => {
     room.phase = 'lobby';
     room.paused = false;
     room.pausedBy = null;
-    // Keep createdBy and settings
 
     persistRoom(currentRoom);
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
@@ -635,33 +548,20 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoom);
     if (!room) return;
 
-    const pIdx = room.players.findIndex((p) => p.id === socket.id);
-    if (pIdx !== -1) {
-      room.players[pIdx].connected = false;
-      room.players[pIdx].id = null;
-    }
-
-    // Auto-pause when a player disconnects during gameplay
-    if (room.phase === 'playing' && pIdx !== -1) {
-      if (!room.paused) {
-        stopTimerTick(currentRoom);
-        room.paused = true;
-        room.pausedBy = `disconnected:${pIdx}`;
-      }
+    // Remove device from room
+    const devIdx = room.devices.findIndex(d => d.socketId === socket.id);
+    if (devIdx !== -1) {
+      room.devices.splice(devIdx, 1);
     }
 
     persistRoom(currentRoom);
-    io.to(currentRoom).emit('player-left', {
-      playerIndex: pIdx,
-      playerName: pIdx !== -1 ? room.players[pIdx].name : null,
-      state: serializeState(room),
-    });
+    io.to(currentRoom).emit('device-left', { state: serializeState(room) });
 
-    const anyConnected = room.players.some((p) => p.connected);
-    if (!anyConnected) {
+    // Clean up empty rooms after 60s
+    if (room.devices.length === 0) {
       setTimeout(() => {
         const r = rooms.get(currentRoom);
-        if (r && !r.players.some((p) => p.connected)) {
+        if (r && r.devices.length === 0) {
           stopTimerTick(currentRoom);
           rooms.delete(currentRoom);
           deleteRoom(currentRoom);
@@ -674,15 +574,16 @@ io.on('connection', (socket) => {
 // Serve static client in production
 app.use(express.static(join(__dirname, '../client/dist')));
 
-// List public rooms in lobby
+// List public rooms
 app.get('/api/rooms', (req, res) => {
   const publicRooms = [];
   for (const [code, room] of rooms) {
-    if (room.settings.public && room.phase === 'lobby') {
+    if (room.settings.public) {
       publicRooms.push({
         code,
+        deviceCount: room.devices.length,
         playerCount: room.players.length,
-        connectedCount: room.players.filter(p => p.connected).length,
+        phase: room.phase,
         createdAt: room.createdAt,
       });
     }
