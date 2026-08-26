@@ -678,6 +678,25 @@ body {
   font-weight: 600;
 }
 
+.player-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-rename {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.player-card:hover .btn-rename {
+  opacity: 0.6;
+}
+
+.player-card:hover .btn-rename:hover {
+  opacity: 1;
+}
+
 .player-status {
   font-size: 0.75rem;
   color: var(--text-secondary);

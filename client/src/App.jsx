@@ -550,8 +550,8 @@ function GamePage() {
   const joinedRef = useRef(false);
   const deviceName = getDeviceName();
   const prevActiveRef = useRef(null);
-  const [isMyTurn, setIsMyTurn] = useState(false);
-  const myIndexRef = useRef(null);
+  const [editingPlayer, setEditingPlayer] = useState(null);
+  const [editName, setEditName] = useState('');
 
   useEffect(() => {
     const s = socket.current;
@@ -613,6 +613,16 @@ function GamePage() {
   const unpass = useCallback((index) => socket.current?.emit('unpass', { index }), [socket]);
   const togglePause = useCallback(() => socket.current?.emit('toggle-pause'), [socket]);
 
+  const handleStartEdit = useCallback((pIdx) => {
+    setEditingPlayer(pIdx);
+    setEditName(state.players[pIdx].name);
+  }, [state]);
+
+  const handleSaveEdit = useCallback((pIdx) => {
+    socket.current?.emit('rename-player', { index: pIdx, name: editName });
+    setEditingPlayer(null);
+  }, [socket, editName]);
+
   if (!state) {
     return <div className="app"><p style={{ textAlign: 'center', padding: '40px' }}>Connecting...</p></div>;
   }
@@ -624,7 +634,7 @@ function GamePage() {
   const upcomingRemaining = [...upcomingInRound, ...upcomingFromStart];
 
   return (
-    <div className={`app ${state.phase === 'playing' && !state.paused ? 'my-turn-active' : ''}`}>
+    <div className="app">
       <div className="game">
         <div className="round-header">
           <div className="round-badge">Round {state.round}</div>
@@ -711,7 +721,32 @@ function GamePage() {
               onClick={isActive && state.phase === 'playing' ? endTurn : undefined}
             >
               <div className="player-info">
-                <div className="player-name" style={{ color: p.color }}>{p.name}</div>
+                {editingPlayer === origIdx ? (
+                  <div className="player-edit-inline">
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSaveEdit(origIdx)}
+                      maxLength={20}
+                      autoFocus
+                      className="player-name-input"
+                      onClick={e => e.stopPropagation()}
+                    />
+                    <button className="btn-mini btn-save" onClick={(e) => { e.stopPropagation(); handleSaveEdit(origIdx); }}>&#10003;</button>
+                  </div>
+                ) : (
+                  <div className="player-name-row">
+                    <div className="player-name" style={{ color: p.color }}>{p.name}</div>
+                    <button
+                      className="btn-icon btn-rename"
+                      title="Rename player"
+                      onClick={(e) => { e.stopPropagation(); handleStartEdit(origIdx); }}
+                    >
+                      &#9998;
+                    </button>
+                  </div>
+                )}
                 <div className="player-status">
                   {hasPassed ? (
                     <span className="pass-badge">Passed #{passPosition + 1}</span>
