@@ -298,10 +298,11 @@ function NewRoom() {
     dragIndexRef.current = idx;
     e.dataTransfer.effectAllowed = 'move';
     e.currentTarget.style.opacity = '0.4';
-    const rect = e.currentTarget.getBoundingClientRect();
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
-    e.dataTransfer.setDragImage(e.currentTarget, offsetX, offsetY);
+    const ghost = e.currentTarget.cloneNode(true);
+    ghost.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0.9;pointer-events:none;z-index:9999;width:' + e.currentTarget.offsetWidth + 'px';
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, e.currentTarget.offsetWidth / 2, e.currentTarget.offsetHeight / 2);
+    setTimeout(() => ghost.remove(), 0);
   }, []);
 
   const handleDragEnd = useCallback((e) => {
@@ -317,6 +318,13 @@ function NewRoom() {
     if (slot && !slot.classList.contains('drag-over')) {
       document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
       slot.classList.add('drag-over');
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    const slot = e.currentTarget.closest('.player-slot');
+    if (slot && !slot.contains(e.relatedTarget)) {
+      slot.classList.remove('drag-over');
     }
   }, []);
 
@@ -477,6 +485,7 @@ function NewRoom() {
                 onDragStart={(e) => handleDragStart(e, pos)}
                 onDragEnd={handleDragEnd}
                 onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, pos)}
               >
                 <span className="drag-handle" title="Drag to reorder">&#x283F;</span>
@@ -844,10 +853,11 @@ function GameOverPage() {
     dragIndexRef.current = idx;
     e.dataTransfer.effectAllowed = 'move';
     e.currentTarget.style.opacity = '0.4';
-    const rect = e.currentTarget.getBoundingClientRect();
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
-    e.dataTransfer.setDragImage(e.currentTarget, offsetX, offsetY);
+    const ghost = e.currentTarget.cloneNode(true);
+    ghost.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0.9;pointer-events:none;z-index:9999;width:' + e.currentTarget.offsetWidth + 'px';
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, e.currentTarget.offsetWidth / 2, e.currentTarget.offsetHeight / 2);
+    setTimeout(() => ghost.remove(), 0);
   }, []);
   const handleDragEnd = useCallback((e) => {
     e.currentTarget.style.opacity = '1';
@@ -861,6 +871,12 @@ function GameOverPage() {
     if (slot && !slot.classList.contains('drag-over')) {
       document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
       slot.classList.add('drag-over');
+    }
+  }, []);
+  const handleDragLeave = useCallback((e) => {
+    const slot = e.currentTarget.closest('.player-slot');
+    if (slot && !slot.contains(e.relatedTarget)) {
+      slot.classList.remove('drag-over');
     }
   }, []);
   const handleDrop = useCallback((e, dropIdx) => {
@@ -907,6 +923,7 @@ function GameOverPage() {
                     onDragStart={(e) => handleDragStart(e, pos)}
                     onDragEnd={handleDragEnd}
                     onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, pos)}
                   >
                 <span className="drag-handle" title="Drag to reorder">&#x283F;</span>
