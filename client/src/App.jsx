@@ -140,12 +140,18 @@ function DeviceNameBar() {
             onBlur={save}
             maxLength={20}
           />
-          <button className="btn btn-small btn-primary" onClick={save}>Save</button>
+          <button className="btn-icon name-bar-save" title="Save" onClick={save}>&#10003;</button>
         </div>
       ) : (
-        <div className="name-bar-display" onClick={() => { setDraft(name); setEditing(true); }}>
+        <div className="name-bar-display">
           <span>Device: <strong>{name}</strong></span>
-          <span className="name-bar-edit-hint">(click to edit)</span>
+          <button
+            className="btn-icon name-bar-edit-btn"
+            title="Edit device name"
+            onClick={() => { setDraft(name); setEditing(true); }}
+          >
+            &#9998;
+          </button>
         </div>
       )}
     </div>

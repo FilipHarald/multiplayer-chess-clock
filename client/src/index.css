@@ -1016,6 +1016,27 @@ body {
   border-color: var(--accent);
 }
 
+.name-bar-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.name-bar-edit-btn,
+.name-bar-save {
+  padding: 2px 4px;
+  font-size: 0.95rem;
+}
+
+.name-bar-save {
+  color: var(--accent);
+}
+
+.name-bar-save:hover {
+  color: #fff;
+  background: var(--accent);
+}
+
 .name-bar-uuid {
   font-family: monospace;
   font-size: 0.75rem;
