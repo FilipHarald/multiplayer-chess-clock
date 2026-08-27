@@ -2,10 +2,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 let appVersion = 'unknown';
 try {
-  appVersion = execSync('git describe --long --always --dirty', { cwd: __dirname }).toString().trim();
+  appVersion = execSync('git describe --long --always --dirty', {
+    cwd: fileURLToPath(new URL('.', import.meta.url)),
+  }).toString().trim();
 } catch {
   // not a git checkout — fall back to 'unknown'
 }
