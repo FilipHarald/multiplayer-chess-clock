@@ -240,6 +240,7 @@ io.on('connection', (socket) => {
 
   socket.on('create-room', ({ minutesPerPlayer, settings, name, deviceId }, cb) => {
     const room = createRoom(minutesPerPlayer || 60, settings);
+    if (currentRoom && currentRoom !== room.code) socket.leave(currentRoom);
     socket.join(room.code);
     currentRoom = room.code;
 
@@ -252,14 +253,15 @@ io.on('connection', (socket) => {
   socket.on('join-room', ({ code, name, deviceId }, cb) => {
     const room = rooms.get(code);
     if (!room) return cb({ error: 'Room not found' });
+    if (currentRoom && currentRoom !== room.code) socket.leave(currentRoom);
+    socket.join(code);
+    currentRoom = code;
 
     // Check if device is already tracked (reconnect)
     const existingDevice = room.devices.find(d => d.deviceId === deviceId);
     if (existingDevice) {
       existingDevice.socketId = socket.id;
       if (name) existingDevice.name = name;
-      socket.join(code);
-      currentRoom = code;
       persistRoom(code);
       io.to(code).emit('state-update', { state: serializeState(room) });
       cb({ state: serializeState(room) });
@@ -268,8 +270,6 @@ io.on('connection', (socket) => {
 
     // Add new device
     room.devices.push({ socketId: socket.id, deviceId: deviceId || socket.id, name: name || `Device ${room.devices.length + 1}` });
-    socket.join(code);
-    currentRoom = code;
     persistRoom(code);
     io.to(code).emit('device-joined', { state: serializeState(room) });
     cb({ state: serializeState(room) });
