@@ -2,6 +2,14 @@ import { useState, useEffect, useRef, useCallback, createContext, useContext } f
 import { BrowserRouter, Routes, Route, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { io } from 'socket.io-client';
+import { Button } from './components/ui/button';
+import { Input } from './components/ui/input';
+import { Collapsible } from './components/ui/collapsible';
+import { Card } from './components/ui/card';
+import { Badge } from './components/ui/badge';
+import { Checkbox } from './components/ui/checkbox';
+import { Select } from './components/ui/select';
+import { Check, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
@@ -53,24 +61,17 @@ function copyToClipboard(text) {
 
 function formatTime(ms) {
   const sign = ms < 0 ? '-' : '';
-  const absMs = Math.abs(ms);
-  const totalSec = Math.ceil(absMs / 1000);
+  const totalSec = Math.ceil(Math.abs(ms) / 1000);
   const min = Math.floor(totalSec / 60);
   const sec = totalSec % 60;
   return `${sign}${min}:${sec.toString().padStart(2, '0')}`;
 }
 
-// Six-dot grip handle (2 columns x 3 rows) used to drag/reorder player slots.
 function DragHandle({ title = 'Drag to reorder' }) {
   return (
     <span className="drag-handle" title={title} aria-hidden="true">
       <svg width="14" height="22" viewBox="0 0 14 22" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="4.5" cy="3.5" r="1.5" />
-        <circle cx="9.5" cy="3.5" r="1.5" />
-        <circle cx="4.5" cy="11.5" r="1.5" />
-        <circle cx="9.5" cy="11.5" r="1.5" />
-        <circle cx="4.5" cy="19.5" r="1.5" />
-        <circle cx="9.5" cy="19.5" r="1.5" />
+        {[3.5, 11.5, 19.5].flatMap(y => [4.5, 9.5].map(x => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.5" />))}
       </svg>
     </span>
   );
@@ -131,7 +132,7 @@ function DeviceNameBar() {
       {editing ? (
         <div className="name-bar-edit">
           <span>Device:</span>
-          <input
+          <Input
             ref={inputRef}
             type="text"
             value={draft}
@@ -140,12 +141,12 @@ function DeviceNameBar() {
             onBlur={save}
             maxLength={20}
           />
-          <button className="btn-icon name-bar-save" title="Save" onClick={save}>&#10003;</button>
+          <Button variant="ghost" size="icon" className="name-bar-save" title="Save" onClick={save}><Check className="size-4" /></Button>
         </div>
       ) : (
         <div className="name-bar-display" onClick={() => { setDraft(name); setEditing(true); }}>
           <span>Device: <strong>{name}</strong></span>
-          <button className="btn-icon name-bar-edit-btn" title="Edit device name">&#9998;</button>
+          <Button variant="ghost" size="icon" className="name-bar-edit-btn" title="Edit device name"><Pencil className="size-4" /></Button>
         </div>
       )}
     </div>
@@ -154,9 +155,12 @@ function DeviceNameBar() {
 
 function AppHeader() {
   const location = useLocation();
+  const navigate = useNavigate();
   return (
     <header className="app-header">
-      {location.pathname !== '/' && <a href="/" className="home-link">&larr; Home</a>}
+      {location.pathname !== '/' && (
+        <Button variant="secondary" size="sm" onClick={() => navigate('/')}>Home</Button>
+      )}
       <DeviceNameBar />
     </header>
   );
@@ -210,37 +214,37 @@ function HomePage() {
   }, [navigate, socket, deviceName]);
 
   return (
-    <div className="app">
-      <div className="setup">
+    <main className="app">
+      <section className="setup rounded-2xl border border-border bg-card/70 px-5 shadow-2xl shadow-black/20 backdrop-blur sm:px-8">
         <h1>Multiplayer Chess Clock</h1>
         <p className="home-description">
           A shared clock for board games. Create a room and share the link — any device with the link can join and control the clocks.
         </p>
 
-        <button className="btn btn-primary" onClick={createRoom} disabled={!connected} style={{ width: '100%' }}>
+        <Button className="w-full" onClick={createRoom} disabled={!connected}>
           {connected ? 'New Room' : 'Connecting...'}
-        </button>
+        </Button>
 
         {publicRooms.length > 0 && (
           <>
             <div className="divider">public rooms</div>
             <div className="public-rooms">
               {publicRooms.map(room => (
-                <div key={room.code} className="public-room-item" onClick={() => navigate(`/room/${room.code}`)}>
+                <Card key={room.code} className="public-room-item" onClick={() => navigate(`/room/${room.code}`)}>
                   <div className="public-room-code">{room.code}</div>
                   <div className="public-room-meta">
                     <span>{room.deviceCount} device{room.deviceCount !== 1 ? 's' : ''}</span>
-                    <span className="public-room-phase">{room.phase}</span>
+                    <Badge variant="secondary" className="public-room-phase">{room.phase}</Badge>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           </>
         )}
 
         {error && <div className="error">{error}</div>}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 
@@ -295,20 +299,11 @@ function NewRoom() {
   const shareLink = `${window.location.origin}/room/${code}`;
   const canStart = state && state.players.length >= 2;
 
-  const [showJoinInfo, setShowJoinInfo] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [copyState, setCopyState] = useState('idle');
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editName, setEditName] = useState('');
-  const [timeDraft, setTimeDraft] = useState('');
   const [dragTarget, setDragTarget] = useState(null);
   const dragIndexRef = useRef(null);
-
-  useEffect(() => {
-    if (state?.minutesPerPlayer != null) {
-      setTimeDraft(String(state.minutesPerPlayer));
-    }
-  }, [state?.minutesPerPlayer]);
 
   const handleCopyLink = useCallback(() => {
     copyToClipboard(shareLink).then(ok => {
@@ -387,21 +382,16 @@ function NewRoom() {
     <div className="app">
       <div className="waiting">
         <div className="room-code-header">
-          <h2>New Room</h2>
+          <Badge variant="outline" className="mb-2">Room</Badge>
+          <h2>{code}</h2>
         </div>
 
         {/* How to join - collapsible, default closed */}
-        <div className="collapsible-section">
-          <button className="collapsible-toggle" onClick={() => setShowJoinInfo(!showJoinInfo)}>
-            <span>How to join</span>
-            <span className={`chevron ${showJoinInfo ? 'open' : ''}`}>&#9662;</span>
-          </button>
-          {showJoinInfo && (
-            <div className="collapsible-content">
+        <Collapsible title="How to join">
               <div className="share-section">
                 <div className="share-link-row" onClick={handleCopyLink}>
                   <span className="share-link-text">{shareLink}</span>
-                  <span className="copy-glyph" title="Copy link">&#128203;</span>
+                  <Copy className="copy-glyph" aria-label="Copy link" />
                   {copyState === 'copied' && <span className="copy-feedback copied">Copied!</span>}
                   {copyState === 'failed' && <span className="copy-feedback failed">Failed</span>}
                 </div>
@@ -409,16 +399,14 @@ function NewRoom() {
                   <QRCodeSVG value={shareLink} size={128} bgColor="#16213e" fgColor="#eee" />
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+        </Collapsible>
 
         {/* Time info */}
-        <div className="time-info">
+        <Card className="time-info">
           <div className="time-info-row">
             <span>Time per player:</span>
             <div className="time-edit-row">
-              <input
+              <Input
                 type="number"
                 className="time-info-input"
                 value={minutesPerPlayer}
@@ -452,42 +440,33 @@ function NewRoom() {
             <span>Connected devices:</span>
             <span>{deviceCount}</span>
           </div>
-        </div>
+        </Card>
 
         {/* Settings - collapsible, default closed */}
-        <div className="collapsible-section">
-          <button className="collapsible-toggle" onClick={() => setShowSettings(!showSettings)}>
-            <span>Settings</span>
-            <span className={`chevron ${showSettings ? 'open' : ''}`}>&#9662;</span>
-          </button>
-          {showSettings && (
-            <div className="collapsible-content">
+        <Collapsible title="Settings">
               <div className="checkbox-group">
                 <label className="checkbox-label">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={state.settings?.public ?? true}
-                    onChange={e => socket.current?.emit('update-settings', { public: e.target.checked })}
+                    onCheckedChange={checked => socket.current?.emit('update-settings', { public: checked })}
                   />
                   List publicly (visible on home page)
                 </label>
                 <label className="checkbox-label muted-option" title="Only pass-order is supported for now">
-                  <input type="checkbox" checked disabled />
+                  <Checkbox checked disabled />
                   Allow users to pass
                 </label>
                 <label className="checkbox-label muted-option" title="Only pass-order is supported for now">
-                  <input type="checkbox" checked disabled />
+                  <Checkbox checked disabled />
                   Use pass-order
                 </label>
-                <label className="checkbox-label muted-option" title="Only countdown is supported for now">
-                  <select disabled className="settings-dropdown">
+                <label className="checkbox-label muted-option settings-select-row" title="Only countdown is supported for now">
+                  <Select disabled className="settings-dropdown" aria-label="Clock direction">
                     <option>countdown</option>
-                  </select>
+                  </Select>
                 </label>
               </div>
-            </div>
-          )}
-        </div>
+        </Collapsible>
 
         {/* Player list */}
         <div className="player-list" onDragLeave={(e) => {
@@ -509,52 +488,52 @@ function NewRoom() {
                 onDragOver={(e) => handleDragOver(e, pos)}
                 onDrop={(e) => handleDrop(e, pos)}
               >
-                <div className={`player-slot connected${dragTarget === pos ? ' drag-target' : ''}`}>
+                <Card className={`player-slot connected${dragTarget === pos ? ' drag-target' : ''}`}>
                   <DragHandle />
                   <div className="player-dot" style={{ background: p.color }} />
 
-                  {editingPlayer === pIdx ? (
-                    <div className="player-edit-inline">
-                      <input
-                        type="text"
-                        value={editName}
-                        onChange={e => setEditName(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSaveEdit(pIdx)}
-                        maxLength={20}
-                        autoFocus
-                        className="player-name-input"
-                      />
-                      <button className="btn-mini btn-save" onClick={() => handleSaveEdit(pIdx)}>&#10003;</button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="player-name-text">{p.name}</span>
-                      <button className="btn-icon" title="Rename" onClick={() => handleStartEdit(pIdx)}>&#9998;</button>
-                      <button
-                        className={`btn-icon btn-delete ${!canDelete ? 'muted-delete' : ''}`}
-                        title={canDelete ? 'Remove player' : 'Cannot remove the first 2 players'}
-                        onClick={canDelete ? () => handleRemovePlayer(pIdx) : undefined}
-                        disabled={!canDelete}
-                      >
-                        &#10005;
-                      </button>
-                    </>
-                  )}
-                </div>
+                {editingPlayer === pIdx ? (
+                  <div className="player-edit-inline">
+                    <Input
+                      type="text"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSaveEdit(pIdx)}
+                      maxLength={20}
+                      autoFocus
+                      className="player-name-input"
+                    />
+                    <Button size="icon" onClick={() => handleSaveEdit(pIdx)} aria-label="Save player name"><Check className="size-4" /></Button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="player-name-text">{p.name}</span>
+                    <Button variant="ghost" size="icon" title="Rename" onClick={() => handleStartEdit(pIdx)}><Pencil className="size-4" /></Button>
+                    <Button
+                      variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive"
+                      title={canDelete ? 'Remove player' : 'Cannot remove the first 2 players'}
+                      onClick={canDelete ? () => handleRemovePlayer(pIdx) : undefined}
+                      disabled={!canDelete}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </>
+                )}
+                </Card>
               </div>
             );
           })}
 
           {state.players.length < 10 && (
-            <div className="player-slot add-player-slot" onClick={handleAddPlayer} title="Click to add another player">
-              <span className="add-player-icon">+</span>
-            </div>
+            <Button variant="outline" className="add-player-slot w-full" onClick={handleAddPlayer} title="Add another player">
+              <Plus className="size-4" /> Add player
+            </Button>
           )}
         </div>
 
-        <button className="btn btn-primary btn-start-game" onClick={startGame} disabled={!canStart}>
+        <Button className="w-full" onClick={startGame} disabled={!canStart}>
           {canStart ? 'Start Game' : 'Need at least 2 players'}
-        </button>
+        </Button>
 
         {error && <div className="error">{error}</div>}
       </div>
@@ -574,7 +553,6 @@ function GamePage() {
   const prevActiveRef = useRef(null);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editName, setEditName] = useState('');
-  const [showJoinInfo, setShowJoinInfo] = useState(false);
   const [copyState, setCopyState] = useState('idle');
 
   useEffect(() => {
@@ -666,14 +644,14 @@ function GamePage() {
     <div className="app">
       <div className="game">
         <div className="round-header">
-          <div className="round-badge">Round {state.round}</div>
+          <Badge variant="outline">Round {state.round}</Badge>
           {state.phase === 'playing' && (
-            <button
-              className={`btn btn-pause ${state.paused ? 'btn-resume' : ''}`}
+            <Button
+              variant={state.paused ? 'success' : 'outline'} size="sm"
               onClick={togglePause}
             >
               {state.paused ? 'Resume' : 'Pause'}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -685,13 +663,7 @@ function GamePage() {
           </div>
         )}
 
-        <div className="collapsible-section">
-          <button className="collapsible-toggle" onClick={() => setShowJoinInfo(!showJoinInfo)}>
-            <span>How to join</span>
-            <span className={`chevron ${showJoinInfo ? 'open' : ''}`}>&#9662;</span>
-          </button>
-          {showJoinInfo && (
-            <div className="collapsible-content">
+        <Collapsible title="How to join">
               <div className="share-section">
                 <div className="share-link-row" onClick={() => {
                   copyToClipboard(`${window.location.origin}/room/${code}`).then(ok => {
@@ -700,7 +672,7 @@ function GamePage() {
                   });
                 }}>
                   <span className="share-link-text">{`${window.location.origin}/room/${code}`}</span>
-                  <span className="copy-glyph" title="Copy link">&#128203;</span>
+                  <Copy className="copy-glyph" aria-label="Copy link" />
                   {copyState === 'copied' && <span className="copy-feedback copied">Copied!</span>}
                   {copyState === 'failed' && <span className="copy-feedback failed">Failed</span>}
                 </div>
@@ -708,9 +680,7 @@ function GamePage() {
                   <QRCodeSVG value={`${window.location.origin}/room/${code}`} size={128} bgColor="#16213e" fgColor="#eee" />
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+        </Collapsible>
 
         <div className="turn-order">
           {state.turnOrder.map((pIdx) => (
@@ -742,13 +712,13 @@ function GamePage() {
                       <span className="upcoming-pos">{passPos + 1}.</span>
                       <div className="player-dot" style={{ background: state.players[pIdx].color }} />
                       <span className="upcoming-name">{state.players[pIdx].name}</span>
-                      <button
-                        className="btn-mini btn-unpass"
+                      <Button
+                        variant="success" size="sm"
                         onClick={() => unpass(pIdx)}
                         title={`Un-pass ${state.players[pIdx].name}`}
                       >
                         Un-pass
-                      </button>
+                      </Button>
                     </div>
                   );
                 })}
@@ -772,7 +742,7 @@ function GamePage() {
           if (isOT) cardClass += ' overtime';
 
           return (
-            <div
+            <Card
               key={origIdx}
               className={cardClass}
               style={{ '--player-color': p.color }}
@@ -781,7 +751,7 @@ function GamePage() {
               <div className="player-info">
                 {editingPlayer === origIdx ? (
                   <div className="player-edit-inline">
-                    <input
+                    <Input
                       type="text"
                       value={editName}
                       onChange={e => setEditName(e.target.value)}
@@ -791,25 +761,25 @@ function GamePage() {
                       className="player-name-input"
                       onClick={e => e.stopPropagation()}
                     />
-                    <button className="btn-mini btn-save" onClick={(e) => { e.stopPropagation(); handleSaveEdit(origIdx); }}>&#10003;</button>
+                    <Button size="icon" onClick={(e) => { e.stopPropagation(); handleSaveEdit(origIdx); }} aria-label="Save player name"><Check className="size-4" /></Button>
                   </div>
                 ) : (
                   <div className="player-name-row">
                     <div className="player-name" style={{ color: p.color }}>{p.name}</div>
-                    <button
-                      className="btn-icon btn-rename"
+                    <Button
+                      variant="ghost" size="icon" className="btn-rename"
                       title="Rename player"
                       onClick={(e) => { e.stopPropagation(); handleStartEdit(origIdx); }}
                     >
-                      &#9998;
-                    </button>
+                      <Pencil className="size-4" />
+                    </Button>
                   </div>
                 )}
                 <div className="player-status">
                   {hasPassed ? (
-                    <span className="pass-badge">Passed #{passPosition + 1}</span>
+                    <Badge variant="secondary">Passed #{passPosition + 1}</Badge>
                   ) : isOT ? (
-                    <span className="overtime-badge">Overtime</span>
+                    <Badge variant="outline" className="overtime-badge">Overtime</Badge>
                   ) : isActive ? (
                     <span style={{ color: p.color }}>Active</span>
                   ) : (
@@ -821,12 +791,12 @@ function GamePage() {
               {canAct && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                   {isActive && (
-                    <button className="btn-mini btn-end" onClick={endTurn}>End Turn</button>
+                    <Button size="sm" onClick={endTurn}>End Turn</Button>
                   )}
-                  <button className="btn-mini btn-pass" onClick={() => pass(origIdx)}>Pass</button>
+                  <Button variant="outline" size="sm" onClick={() => pass(origIdx)}>Pass</Button>
                 </div>
               )}
-            </div>
+            </Card>
           );
         })}
       </div>
@@ -892,9 +862,20 @@ function GameOverPage() {
       e.dataTransfer.setDragImage(el, el.offsetWidth / 2, el.offsetHeight / 2);
     }
   }, []);
-  const handleDragEnd = useCallback((e) => { e.currentTarget.style.opacity = '1'; dragIndexRef.current = null; setDragTarget(null); }, []);
-  const handleDragOver = useCallback((e, dropIdx) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragTarget(dropIdx === dragIndexRef.current ? null : dropIdx); }, []);
-  const handleDragEnter = useCallback((e, dropIdx) => { e.preventDefault(); setDragTarget(dropIdx === dragIndexRef.current ? null : dropIdx); }, []);
+  const handleDragEnd = useCallback((e) => {
+    e.currentTarget.style.opacity = '1';
+    dragIndexRef.current = null;
+    setDragTarget(null);
+  }, []);
+  const handleDragOver = useCallback((e, dropIdx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragTarget(dropIdx === dragIndexRef.current ? null : dropIdx);
+  }, []);
+  const handleDragEnter = useCallback((e, dropIdx) => {
+    e.preventDefault();
+    setDragTarget(dropIdx === dragIndexRef.current ? null : dropIdx);
+  }, []);
   const handleDrop = useCallback((e, dropIdx) => {
     e.preventDefault();
     const dragIdx = dragIndexRef.current;
@@ -945,12 +926,12 @@ function GameOverPage() {
                     onDragOver={(e) => handleDragOver(e, pos)}
                     onDrop={(e) => handleDrop(e, pos)}
                   >
-                    <div className={`player-slot connected${dragTarget === pos ? ' drag-target' : ''}`}>
+                    <Card className={`player-slot connected${dragTarget === pos ? ' drag-target' : ''}`}>
                       <DragHandle />
                       <span style={{ fontFamily: 'monospace', opacity: 0.6 }}>{pos + 1}.</span>
                       <div className="player-dot" style={{ background: p.color }} />
                       <span>{p.name}</span>
-                    </div>
+                    </Card>
                   </div>
                 );
               })}
@@ -964,18 +945,18 @@ function GameOverPage() {
         {!isRoundOver && (
           <div className="player-list" style={{ width: '100%' }}>
             {state.players.map((p, i) => (
-              <div key={i} className="player-slot connected">
+              <Card key={i} className="player-slot connected">
                 <div className="player-dot" style={{ background: p.color }} />
                 <span>{p.name}</span>
                 <span style={{ marginLeft: 'auto', fontFamily: 'monospace' }}>{formatTime(p.timerMs)}</span>
-              </div>
+              </Card>
             ))}
           </div>
         )}
 
         <div className="game-over-actions">
-          <button className="btn btn-primary" onClick={nextRound}>Next Round</button>
-          <button className="btn btn-secondary" onClick={resetGame}>New Game</button>
+          <Button onClick={nextRound}>Next Round</Button>
+          <Button variant="secondary" onClick={resetGame}>New Game</Button>
         </div>
       </div>
     </div>
