@@ -269,25 +269,51 @@ body {
   border-radius: 8px;
 }
 
-.player-slot.draggable {
+/* Drag zone wraps each reorderable slot; generous padding enlarges the
+   accepted release area so the dragged card can be dropped around the marker.
+   The glow itself is drawn on the inner .player-slot (see .drag-target) so it
+   is exactly aligned with the marker border, not with this padded wrapper. */
+.drag-zone {
+  position: relative;
   cursor: grab;
+  padding: 18px 8px;
+  margin: -14px 0;
+  border-radius: 10px;
 }
 
-.player-slot.draggable:active {
+.drag-zone:active,
+.drag-zone:active .player-slot {
   cursor: grabbing;
 }
 
-.drag-handle {
-  color: #555;
-  font-size: 1.3rem;
-  user-select: none;
-  flex-shrink: 0;
-  letter-spacing: -0.1em;
+.drag-zone .player-slot {
+  cursor: grab;
 }
 
-.player-slot.drag-over {
-  border-color: #fff !important;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4), inset 0 0 8px rgba(255, 255, 255, 0.1) !important;
+.drag-zone > .player-slot.drag-target {
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.45), 0 0 24px rgba(255, 255, 255, 0.25);
+  animation: drag-target-glow 1s ease-in-out infinite alternate;
+}
+
+@keyframes drag-target-glow {
+  from {
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.35), 0 0 16px rgba(255, 255, 255, 0.15);
+  }
+  to {
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.65), 0 0 34px rgba(255, 255, 255, 0.35);
+  }
+}
+
+.drag-handle {
+  width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+  cursor: grab;
+  color: #888;
 }
 
 .turn-order-pos {
@@ -733,6 +759,26 @@ body {
 .player-timer.low {
   color: var(--accent);
   animation: pulse 1s infinite;
+}
+
+.player-timer.overtime {
+  color: var(--accent);
+  animation: pulse 1s infinite;
+}
+
+.player-card.overtime {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(233, 69, 96, 0.25);
+}
+
+.overtime-badge {
+  font-size: 0.7rem;
+  color: var(--accent);
+  background: rgba(233, 69, 96, 0.15);
+  border: 1px solid var(--accent);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
 }
 
 @keyframes pulse {
@@ -1198,11 +1244,18 @@ body {
 
 
 .version-footer {
-  margin-top: 1.5rem;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  padding: 2px 0 3px;
   font-size: 0.7rem;
   color: var(--text-secondary);
-  opacity: 0.6;
+  background: rgba(10, 14, 28, 0.85);
+  opacity: 0.7;
   text-align: center;
   font-family: monospace;
   user-select: all;
+  pointer-events: none;
 }

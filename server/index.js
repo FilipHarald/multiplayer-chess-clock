@@ -91,7 +91,7 @@ function createRoom(minutesPerPlayer, settings = {}) {
   const players = Array.from({ length: 2 }, (_, i) => ({
     name: `Player ${i + 1}`,
     color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-    timerMs: minutesPerPlayer * 60 * 1000,
+    elapsedMs: 0,
   }));
 
   const room = {
@@ -99,6 +99,7 @@ function createRoom(minutesPerPlayer, settings = {}) {
     players,
     devices: [],
     minutesPerPlayer: minutesPerPlayer || 60,
+    limitMs: (minutesPerPlayer || 60) * 60 * 1000,
     waitingOrder: [0, 1],
     turnOrder: [0, 1],
     currentTurnIndex: 0,
@@ -135,20 +136,15 @@ function startTimerTick(code) {
     const player = room.players[activeIdx];
     if (!player) return;
 
-    player.timerMs -= 100;
-    if (player.timerMs <= 0) {
-      player.timerMs = 0;
-      clearInterval(room.timerInterval);
-      room.timerInterval = null;
-      room.phase = 'game-over';
-      persistRoom(code);
-      io.to(code).emit('game-over', { loserId: activeIdx, state: serializeState(room) });
-      return;
-    }
+    // Clocks always count upward from 0. The display runs down from the room's
+    // limit and goes negative in overtime; a player whose elapsed passes the
+    // limit is flagged overtime and keeps counting (never eliminated by time).
+    player.elapsedMs += 100;
 
     io.to(code).emit('timer-tick', {
       activePlayerIndex: activeIdx,
-      timers: room.players.map((p) => p.timerMs),
+      timers: room.players.map((p) => room.limitMs - p.elapsedMs),
+      overtime: room.players.map((p) => p.elapsedMs >= room.limitMs),
     });
   }, 100);
 }
@@ -217,7 +213,9 @@ function serializeState(room) {
       index: i,
       name: p.name,
       color: p.color,
-      timerMs: p.timerMs,
+      elapsedMs: p.elapsedMs,
+      timerMs: room.limitMs - p.elapsedMs,
+      overtime: p.elapsedMs >= room.limitMs,
     })),
     devices: room.devices.map(d => ({ id: d.deviceId, name: d.name })),
     waitingOrder: room.waitingOrder,
@@ -231,6 +229,7 @@ function serializeState(room) {
     pausedBy: room.pausedBy,
     settings: room.settings,
     minutesPerPlayer: room.minutesPerPlayer,
+    limitMs: room.limitMs,
   };
 }
 
@@ -310,7 +309,7 @@ io.on('connection', (socket) => {
     room.players.push({
       name: `Player ${newIdx + 1}`,
       color: PLAYER_COLORS[newIdx % PLAYER_COLORS.length],
-      timerMs: room.minutesPerPlayer * 60 * 1000,
+      elapsedMs: 0,
     });
     room.waitingOrder.push(newIdx);
 
@@ -505,9 +504,9 @@ io.on('connection', (socket) => {
     if (typeof minutesPerPlayer !== 'number' || minutesPerPlayer < 1 || minutesPerPlayer > 999) return;
 
     room.minutesPerPlayer = minutesPerPlayer;
-    const newTimerMs = minutesPerPlayer * 60 * 1000;
+    room.limitMs = minutesPerPlayer * 60 * 1000;
     for (const p of room.players) {
-      p.timerMs = newTimerMs;
+      p.elapsedMs = 0;
     }
 
     persistRoom(currentRoom);
@@ -522,12 +521,14 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const count = playerCount || room.players.length;
-    const minutes = minutesPerPlayer || room.players[0]?.timerMs / 60000 || 60;
+    const minutes = minutesPerPlayer || room.minutesPerPlayer || room.limitMs / 60000 || 60;
+    room.minutesPerPlayer = minutes;
+    room.limitMs = minutes * 60 * 1000;
 
     room.players = Array.from({ length: count }, (_, i) => ({
       name: `Player ${i + 1}`,
       color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-      timerMs: minutes * 60 * 1000,
+      elapsedMs: 0,
     }));
 
     room.turnOrder = room.players.map((_, i) => i);

@@ -52,10 +52,28 @@ function copyToClipboard(text) {
 }
 
 function formatTime(ms) {
-  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const sign = ms < 0 ? '-' : '';
+  const absMs = Math.abs(ms);
+  const totalSec = Math.ceil(absMs / 1000);
   const min = Math.floor(totalSec / 60);
   const sec = totalSec % 60;
-  return `${min}:${sec.toString().padStart(2, '0')}`;
+  return `${sign}${min}:${sec.toString().padStart(2, '0')}`;
+}
+
+// Six-dot grip handle (2 columns x 3 rows) used to drag/reorder player slots.
+function DragHandle({ title = 'Drag to reorder' }) {
+  return (
+    <span className="drag-handle" title={title} aria-hidden="true">
+      <svg width="14" height="22" viewBox="0 0 14 22" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="4.5" cy="3.5" r="1.5" />
+        <circle cx="9.5" cy="3.5" r="1.5" />
+        <circle cx="4.5" cy="11.5" r="1.5" />
+        <circle cx="9.5" cy="11.5" r="1.5" />
+        <circle cx="4.5" cy="19.5" r="1.5" />
+        <circle cx="9.5" cy="19.5" r="1.5" />
+      </svg>
+    </span>
+  );
 }
 
 // ---------- Shared socket ----------
@@ -282,8 +300,15 @@ function NewRoom() {
   const [copyState, setCopyState] = useState('idle');
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editName, setEditName] = useState('');
-  
+  const [timeDraft, setTimeDraft] = useState('');
+  const [dragTarget, setDragTarget] = useState(null);
   const dragIndexRef = useRef(null);
+
+  useEffect(() => {
+    if (state?.minutesPerPlayer != null) {
+      setTimeDraft(String(state.minutesPerPlayer));
+    }
+  }, [state?.minutesPerPlayer]);
 
   const handleCopyLink = useCallback(() => {
     copyToClipboard(shareLink).then(ok => {
@@ -298,39 +323,33 @@ function NewRoom() {
     dragIndexRef.current = idx;
     e.dataTransfer.effectAllowed = 'move';
     e.currentTarget.style.opacity = '0.4';
-    const ghost = e.currentTarget.cloneNode(true);
-    ghost.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0.9;pointer-events:none;z-index:9999;width:' + e.currentTarget.offsetWidth + 'px';
-    document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, e.currentTarget.offsetWidth / 2, e.currentTarget.offsetHeight / 2);
-    setTimeout(() => ghost.remove(), 0);
+    if (e.dataTransfer?.setDragImage) {
+      const el = e.currentTarget;
+      e.dataTransfer.setDragImage(el, el.offsetWidth / 2, el.offsetHeight / 2);
+    }
   }, []);
 
   const handleDragEnd = useCallback((e) => {
     e.currentTarget.style.opacity = '1';
     dragIndexRef.current = null;
-    document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
+    setDragTarget(null);
   }, []);
 
-  const handleDragOver = useCallback((e) => {
+  const handleDragOver = useCallback((e, dropIdx) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    const slot = e.currentTarget.closest('.player-slot');
-    if (slot && !slot.classList.contains('drag-over')) {
-      document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
-      slot.classList.add('drag-over');
-    }
+    setDragTarget(dropIdx === dragIndexRef.current ? null : dropIdx);
   }, []);
 
-  const handleDragLeave = useCallback((e) => {
-    const slot = e.currentTarget.closest('.player-slot');
-    if (slot && !slot.contains(e.relatedTarget)) {
-      slot.classList.remove('drag-over');
-    }
+  const handleDragEnter = useCallback((e, dropIdx) => {
+    e.preventDefault();
+    setDragTarget(dropIdx === dragIndexRef.current ? null : dropIdx);
   }, []);
 
   const handleDrop = useCallback((e, dropIdx) => {
     e.preventDefault();
     const dragIdx = dragIndexRef.current;
+    setDragTarget(null);
     if (dragIdx === null || dragIdx === dropIdx) return;
     const newOrder = [...displayOrder];
     const [moved] = newOrder.splice(dragIdx, 1);
@@ -471,7 +490,9 @@ function NewRoom() {
         </div>
 
         {/* Player list */}
-        <div className="player-list">
+        <div className="player-list" onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) setDragTarget(null);
+        }}>
           {displayOrder.map((pIdx, pos) => {
             const p = state.players[pIdx];
             if (!p) return null;
@@ -480,44 +501,46 @@ function NewRoom() {
             return (
               <div
                 key={pIdx}
-                className="player-slot connected draggable"
+                className="drag-zone"
                 draggable
                 onDragStart={(e) => handleDragStart(e, pos)}
                 onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
+                onDragEnter={(e) => handleDragEnter(e, pos)}
+                onDragOver={(e) => handleDragOver(e, pos)}
                 onDrop={(e) => handleDrop(e, pos)}
               >
-                <span className="drag-handle" title="Drag to reorder">&#x283F;</span>
-                <div className="player-dot" style={{ background: p.color }} />
+                <div className={`player-slot connected${dragTarget === pos ? ' drag-target' : ''}`}>
+                  <DragHandle />
+                  <div className="player-dot" style={{ background: p.color }} />
 
-                {editingPlayer === pIdx ? (
-                  <div className="player-edit-inline">
-                    <input
-                      type="text"
-                      value={editName}
-                      onChange={e => setEditName(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleSaveEdit(pIdx)}
-                      maxLength={20}
-                      autoFocus
-                      className="player-name-input"
-                    />
-                    <button className="btn-mini btn-save" onClick={() => handleSaveEdit(pIdx)}>&#10003;</button>
-                  </div>
-                ) : (
-                  <>
-                    <span className="player-name-text">{p.name}</span>
-                    <button className="btn-icon" title="Rename" onClick={() => handleStartEdit(pIdx)}>&#9998;</button>
-                    <button
-                      className={`btn-icon btn-delete ${!canDelete ? 'muted-delete' : ''}`}
-                      title={canDelete ? 'Remove player' : 'Cannot remove the first 2 players'}
-                      onClick={canDelete ? () => handleRemovePlayer(pIdx) : undefined}
-                      disabled={!canDelete}
-                    >
-                      &#10005;
-                    </button>
-                  </>
-                )}
+                  {editingPlayer === pIdx ? (
+                    <div className="player-edit-inline">
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSaveEdit(pIdx)}
+                        maxLength={20}
+                        autoFocus
+                        className="player-name-input"
+                      />
+                      <button className="btn-mini btn-save" onClick={() => handleSaveEdit(pIdx)}>&#10003;</button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="player-name-text">{p.name}</span>
+                      <button className="btn-icon" title="Rename" onClick={() => handleStartEdit(pIdx)}>&#9998;</button>
+                      <button
+                        className={`btn-icon btn-delete ${!canDelete ? 'muted-delete' : ''}`}
+                        title={canDelete ? 'Remove player' : 'Cannot remove the first 2 players'}
+                        onClick={canDelete ? () => handleRemovePlayer(pIdx) : undefined}
+                        disabled={!canDelete}
+                      >
+                        &#10005;
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -545,6 +568,7 @@ function GamePage() {
   const navigate = useNavigate();
   const [state, setState] = useState(null);
   const [timers, setTimers] = useState([]);
+  const [overtime, setOvertime] = useState([]);
   const joinedRef = useRef(false);
   const deviceName = getDeviceName();
   const prevActiveRef = useRef(null);
@@ -563,6 +587,7 @@ function GamePage() {
       if (res.error) return;
       setState(res.state);
       setTimers(res.state.players.map(p => p.timerMs));
+      setOvertime(res.state.players.map(p => p.overtime));
       prevActiveRef.current = res.state.activePlayerIndex;
     });
   }, [code, socket, connected, navigate, deviceName]);
@@ -574,11 +599,15 @@ function GamePage() {
     const updateFromState = (newState) => {
       setState(newState);
       setTimers(newState.players.map(p => p.timerMs));
+      setOvertime(newState.players.map(p => p.overtime));
       prevActiveRef.current = newState.activePlayerIndex;
     };
 
     s.on('state-update', ({ state: s }) => updateFromState(s));
-    s.on('timer-tick', ({ timers: t }) => setTimers(t));
+    s.on('timer-tick', ({ timers: t, overtime: ot }) => {
+      setTimers(t);
+      if (Array.isArray(ot)) setOvertime(ot);
+    });
     s.on('turn-changed', ({ state: s }) => updateFromState(s));
     s.on('player-passed', ({ state: s }) => updateFromState(s));
     s.on('player-unpassed', ({ state: s }) => updateFromState(s));
@@ -733,12 +762,14 @@ function GamePage() {
           const hasPassed = state.passOrder.includes(origIdx);
           const passPosition = state.passOrder.indexOf(origIdx);
           const timer = timers[origIdx] ?? p.timerMs;
-          const isLow = timer < 30000 && timer > 0;
+          const isOT = overtime[origIdx] ?? p.overtime;
+          const isLow = timer < 30000 && timer > 0 && !isOT;
           const canAct = state.phase === 'playing' && !hasPassed;
 
           let cardClass = 'player-card';
           if (isActive) cardClass += ' active';
           if (hasPassed) cardClass += ' passed';
+          if (isOT) cardClass += ' overtime';
 
           return (
             <div
@@ -777,6 +808,8 @@ function GamePage() {
                 <div className="player-status">
                   {hasPassed ? (
                     <span className="pass-badge">Passed #{passPosition + 1}</span>
+                  ) : isOT ? (
+                    <span className="overtime-badge">Overtime</span>
                   ) : isActive ? (
                     <span style={{ color: p.color }}>Active</span>
                   ) : (
@@ -784,7 +817,7 @@ function GamePage() {
                   )}
                 </div>
               </div>
-              <div className={`player-timer ${isLow ? 'low' : ''}`}>{formatTime(timer)}</div>
+              <div className={`player-timer ${isLow ? 'low' : ''} ${isOT ? 'overtime' : ''}`}>{formatTime(timer)}</div>
               {canAct && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                   {isActive && (
@@ -849,39 +882,23 @@ function GameOverPage() {
   const isRoundOver = state?.phase === 'round-over';
 
   const dragIndexRef = useRef(null);
+  const [dragTarget, setDragTarget] = useState(null);
   const handleDragStart = useCallback((e, idx) => {
     dragIndexRef.current = idx;
     e.dataTransfer.effectAllowed = 'move';
     e.currentTarget.style.opacity = '0.4';
-    const ghost = e.currentTarget.cloneNode(true);
-    ghost.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0.9;pointer-events:none;z-index:9999;width:' + e.currentTarget.offsetWidth + 'px';
-    document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, e.currentTarget.offsetWidth / 2, e.currentTarget.offsetHeight / 2);
-    setTimeout(() => ghost.remove(), 0);
-  }, []);
-  const handleDragEnd = useCallback((e) => {
-    e.currentTarget.style.opacity = '1';
-    dragIndexRef.current = null;
-    document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
-  }, []);
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const slot = e.currentTarget.closest('.player-slot');
-    if (slot && !slot.classList.contains('drag-over')) {
-      document.querySelectorAll('.player-slot.drag-over').forEach(el => el.classList.remove('drag-over'));
-      slot.classList.add('drag-over');
+    if (e.dataTransfer?.setDragImage) {
+      const el = e.currentTarget;
+      e.dataTransfer.setDragImage(el, el.offsetWidth / 2, el.offsetHeight / 2);
     }
   }, []);
-  const handleDragLeave = useCallback((e) => {
-    const slot = e.currentTarget.closest('.player-slot');
-    if (slot && !slot.contains(e.relatedTarget)) {
-      slot.classList.remove('drag-over');
-    }
-  }, []);
+  const handleDragEnd = useCallback((e) => { e.currentTarget.style.opacity = '1'; dragIndexRef.current = null; setDragTarget(null); }, []);
+  const handleDragOver = useCallback((e, dropIdx) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragTarget(dropIdx === dragIndexRef.current ? null : dropIdx); }, []);
+  const handleDragEnter = useCallback((e, dropIdx) => { e.preventDefault(); setDragTarget(dropIdx === dragIndexRef.current ? null : dropIdx); }, []);
   const handleDrop = useCallback((e, dropIdx) => {
     e.preventDefault();
     const dragIdx = dragIndexRef.current;
+    setDragTarget(null);
     if (dragIdx === null || dragIdx === dropIdx) return;
     const newOrder = [...state.passOrder];
     const [moved] = newOrder.splice(dragIdx, 1);
@@ -912,24 +929,28 @@ function GameOverPage() {
             <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
               Everyone passed — next round runs in pass order:
             </p>
-            <div className="player-list" style={{ width: '100%' }}>
+            <div className="player-list" style={{ width: '100%' }} onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) setDragTarget(null);
+            }}>
               {state.passOrder.map((pIdx, pos) => {
                 const p = state.players[pIdx];
                 return (
                   <div
                     key={pIdx}
-                    className="player-slot connected draggable"
+                    className="drag-zone"
                     draggable
                     onDragStart={(e) => handleDragStart(e, pos)}
                     onDragEnd={handleDragEnd}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
+                    onDragEnter={(e) => handleDragEnter(e, pos)}
+                    onDragOver={(e) => handleDragOver(e, pos)}
                     onDrop={(e) => handleDrop(e, pos)}
                   >
-                <span className="drag-handle" title="Drag to reorder">&#x283F;</span>
-                    <span style={{ fontFamily: 'monospace', opacity: 0.6 }}>{pos + 1}.</span>
-                    <div className="player-dot" style={{ background: p.color }} />
-                    <span>{p.name}</span>
+                    <div className={`player-slot connected${dragTarget === pos ? ' drag-target' : ''}`}>
+                      <DragHandle />
+                      <span style={{ fontFamily: 'monospace', opacity: 0.6 }}>{pos + 1}.</span>
+                      <div className="player-dot" style={{ background: p.color }} />
+                      <span>{p.name}</span>
+                    </div>
                   </div>
                 );
               })}
@@ -974,6 +995,7 @@ export default function App() {
           <Route path="/game/:code" element={<GamePage />} />
           <Route path="/gameover/:code" element={<GameOverPage />} />
         </Routes>
+        <div className="version-footer">{__APP_VERSION__}</div>
       </SocketProvider>
     </BrowserRouter>
   );
