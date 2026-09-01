@@ -67,6 +67,19 @@ function formatTime(ms) {
   return `${sign}${min}:${sec.toString().padStart(2, '0')}`;
 }
 
+const COLOR_NAMES = {
+  '#e74c3c': 'Red',
+  '#3498db': 'Blue',
+  '#2ecc71': 'Green',
+  '#f39c12': 'Orange',
+  '#9b59b6': 'Purple',
+  '#1abc9c': 'Teal',
+  '#e67e22': 'Coral',
+  '#34495e': 'Navy',
+  '#e91e63': 'Pink',
+  '#00bcd4': 'Cyan',
+};
+
 function DragHandle({ title = 'Drag to reorder' }) {
   return (
     <span className="drag-handle" title={title} aria-hidden="true">
@@ -364,6 +377,7 @@ function NewRoom() {
 
   const handleAddPlayer = useCallback(() => socket.current?.emit('add-player'), [socket]);
   const handleRemovePlayer = useCallback((pIdx) => socket.current?.emit('remove-player', { index: pIdx }), [socket]);
+  const handleColorChange = useCallback((pIdx, color) => socket.current?.emit('set-color', { index: pIdx, color }), [socket]);
 
   if (!state) {
     return (
@@ -490,7 +504,20 @@ function NewRoom() {
               >
                 <Card className={`player-slot connected${dragTarget === pos ? ' drag-target' : ''}`}>
                   <DragHandle />
-                  <div className="player-dot" style={{ background: p.color }} />
+                  <label className="color-picker" title="Change player color">
+                    <span className="color-picker-swatch" style={{ background: p.color }} />
+                    <Select
+                      className="color-picker-select"
+                      aria-label="Player color"
+                      value={p.color}
+                      onChange={e => handleColorChange(pIdx, e.target.value)}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {(state.availableColors || []).map(c => (
+                        <option key={c} value={c}>{COLOR_NAMES[c] || c}</option>
+                      ))}
+                    </Select>
+                  </label>
 
                 {editingPlayer === pIdx ? (
                   <div className="player-edit-inline">

@@ -230,6 +230,7 @@ function serializeState(room) {
     settings: room.settings,
     minutesPerPlayer: room.minutesPerPlayer,
     limitMs: room.limitMs,
+    availableColors: PLAYER_COLORS,
   };
 }
 
@@ -294,6 +295,23 @@ io.on('connection', (socket) => {
     if (typeof index !== 'number' || index < 0 || index >= room.players.length) return;
     if (typeof name !== 'string' || name.length > 30) return;
     room.players[index].name = name.trim() || room.players[index].name;
+    persistRoom(currentRoom);
+    io.to(currentRoom).emit('state-update', { state: serializeState(room) });
+  });
+
+  socket.on('set-color', ({ index, color }) => {
+    if (currentRoom === null) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+    if (typeof index !== 'number' || index < 0 || index >= room.players.length) return;
+    if (!PLAYER_COLORS.includes(color)) return;
+
+    const otherIdx = room.players.findIndex((p, i) => i !== index && p.color === color);
+    if (otherIdx !== -1) {
+      // Color taken — swap: previous owner takes this player's old color, this player gets the requested one
+      room.players[otherIdx].color = room.players[index].color;
+    }
+    room.players[index].color = color;
     persistRoom(currentRoom);
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
