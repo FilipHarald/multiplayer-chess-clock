@@ -749,16 +749,20 @@ function GamePage() {
           ))}
         </div>
 
-        {state.phase === 'playing' && upcomingRemaining.length > 0 && (
+        {state.phase === 'playing' && (upcomingRemaining.length > 0 || allPassed.length > 0) && (
           <div className="upcoming-order">
-            <div className="upcoming-label">Up next</div>
-            {upcomingRemaining.map((pIdx, pos) => (
-              <div key={pIdx} className="upcoming-item">
-                <span className="upcoming-pos">{pos + 1}.</span>
-                <div className="player-dot" style={{ background: state.players[pIdx].color }} />
-                <span className="upcoming-name">{state.players[pIdx].name}</span>
-              </div>
-            ))}
+            {upcomingRemaining.length > 0 && (
+              <>
+                <div className="upcoming-label">Up next</div>
+                {upcomingRemaining.map((pIdx, pos) => (
+                  <div key={pIdx} className="upcoming-item">
+                    <span className="upcoming-pos">{pos + 1}.</span>
+                    <div className="player-dot" style={{ background: state.players[pIdx].color }} />
+                    <span className="upcoming-name">{state.players[pIdx].name}</span>
+                  </div>
+                ))}
+              </>
+            )}
             {allPassed.length > 0 && (
               <>
                 <div className="upcoming-divider">Passed</div>
