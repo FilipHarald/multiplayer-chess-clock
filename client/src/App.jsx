@@ -9,7 +9,7 @@ import { Card } from './components/ui/card';
 import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
-import { Check, Copy, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Copy, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
@@ -87,6 +87,56 @@ function DragHandle({ title = 'Drag to reorder' }) {
         {[3.5, 11.5, 19.5].flatMap(y => [4.5, 9.5].map(x => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.5" />))}
       </svg>
     </span>
+  );
+}
+
+function ColorPicker({ value, colors, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  return (
+    <div className="color-picker" ref={ref}>
+      <button
+        type="button"
+        className="color-picker-trigger"
+        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+        title="Change player color"
+      >
+        <span className="color-picker-swatch" style={{ background: value }} />
+        <span className="color-picker-name">{COLOR_NAMES[value] || value}</span>
+        <ChevronDown className="color-picker-caret" />
+      </button>
+      {open && (
+        <div className="color-picker-menu" role="listbox">
+          {(colors || []).map(c => (
+            <button
+              type="button"
+              key={c}
+              role="option"
+              aria-selected={c === value}
+              className="color-picker-option"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange(c);
+                setOpen(false);
+              }}
+            >
+              <span className="color-picker-swatch" style={{ background: c }} />
+              <span>{COLOR_NAMES[c] || c}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -504,20 +554,11 @@ function NewRoom() {
               >
                 <Card className={`player-slot connected${dragTarget === pos ? ' drag-target' : ''}`}>
                   <DragHandle />
-                  <label className="color-picker" title="Change player color">
-                    <span className="color-picker-swatch" style={{ background: p.color }} />
-                    <Select
-                      className="color-picker-select"
-                      aria-label="Player color"
-                      value={p.color}
-                      onChange={e => handleColorChange(pIdx, e.target.value)}
-                      onClick={e => e.stopPropagation()}
-                    >
-                      {(state.availableColors || []).map(c => (
-                        <option key={c} value={c}>{COLOR_NAMES[c] || c}</option>
-                      ))}
-                    </Select>
-                  </label>
+                  <ColorPicker
+                    value={p.color}
+                    colors={state.availableColors}
+                    onChange={c => handleColorChange(pIdx, c)}
+                  />
 
                 {editingPlayer === pIdx ? (
                   <div className="player-edit-inline">
