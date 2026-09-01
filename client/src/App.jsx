@@ -708,6 +708,11 @@ function GamePage() {
   const upcomingFromStart = state.turnOrder.slice(0, state.currentTurnIndex);
   const upcomingRemaining = [...upcomingInRound, ...upcomingFromStart];
 
+  // Merge confirmed + pending passes for display — pending passes are
+  // provisional until their turn slot arrives, but should be visually
+  // indicated immediately so the UI reflects what happened.
+  const allPassed = [...state.passOrder, ...state.pendingPass];
+
   return (
     <div className="app">
       <div className="game">
@@ -754,16 +759,17 @@ function GamePage() {
                 <span className="upcoming-name">{state.players[pIdx].name}</span>
               </div>
             ))}
-            {state.passOrder.length > 0 && (
+            {allPassed.length > 0 && (
               <>
                 <div className="upcoming-divider">Passed</div>
-                {state.passOrder.map((pIdx) => {
+                {allPassed.map((pIdx) => {
                   const passPos = state.passOrder.indexOf(pIdx);
+                  const isPending = state.pendingPass.includes(pIdx);
                   return (
                     <div key={pIdx} className="upcoming-item passed-item">
-                      <span className="upcoming-pos">{passPos + 1}.</span>
+                      <span className="upcoming-pos">{passPos !== -1 ? (passPos + 1) + '.' : '~'}</span>
                       <div className="player-dot" style={{ background: state.players[pIdx].color }} />
-                      <span className="upcoming-name">{state.players[pIdx].name}</span>
+                      <span className="upcoming-name">{state.players[pIdx].name}{isPending ? ' (queued)' : ''}</span>
                       <Button
                         variant="success" size="sm"
                         onClick={() => unpass(pIdx)}
@@ -795,8 +801,9 @@ function GamePage() {
 
         {state.players.map((p, origIdx) => {
           const isActive = activeIdx === origIdx;
-          const hasPassed = state.passOrder.includes(origIdx);
+          const hasPassed = allPassed.includes(origIdx);
           const passPosition = state.passOrder.indexOf(origIdx);
+          const isPending = state.pendingPass.includes(origIdx);
           const timer = timers[origIdx] ?? p.timerMs;
           const isOT = overtime[origIdx] ?? p.overtime;
           const isLow = timer < 30000 && timer > 0 && !isOT;
@@ -844,7 +851,7 @@ function GamePage() {
                 )}
                 <div className="player-status">
                   {hasPassed ? (
-                    <Badge variant="secondary">Passed #{passPosition + 1}</Badge>
+                    <Badge variant="secondary">Passed{passPosition !== -1 ? ` #${passPosition + 1}` : ''}{isPending ? ' (queued)' : ''}</Badge>
                   ) : isOT ? (
                     <Badge variant="outline" className="overtime-badge">Overtime</Badge>
                   ) : isActive ? (

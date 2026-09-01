@@ -105,6 +105,7 @@ function createRoom(minutesPerPlayer, settings = {}) {
     currentTurnIndex: 0,
     round: 1,
     passOrder: [],
+    pendingPass: [],
     phase: 'lobby',
     timerInterval: null,
     paused: false,
@@ -157,6 +158,27 @@ function stopTimerTick(code) {
   }
 }
 
+function consumePendingAtTurn(code) {
+  const room = rooms.get(code);
+  if (!room || room.phase !== 'playing') return;
+
+  // A provisional pre-pass becomes a confirmed pass the moment the rotation
+  // reaches that player's turn slot — this is what pins the next round's order
+  // to turn position (B,C,A) instead of click order (C,B,A).
+  while (room.turnOrder.length > 0) {
+    const active = room.turnOrder[room.currentTurnIndex];
+    const pendPos = room.pendingPass.indexOf(active);
+    if (pendPos === -1) break;
+
+    room.pendingPass.splice(pendPos, 1);
+    room.passOrder.push(active);
+    room.turnOrder.splice(room.currentTurnIndex, 1);
+    if (room.currentTurnIndex >= room.turnOrder.length && room.turnOrder.length > 0) {
+      room.currentTurnIndex = 0;
+    }
+  }
+}
+
 function advanceTurn(code) {
   const room = rooms.get(code);
   if (!room || room.phase !== 'playing' || room.turnOrder.length === 0) return;
@@ -166,6 +188,7 @@ function advanceTurn(code) {
     room.currentTurnIndex = 0;
   }
 
+  consumePendingAtTurn(code);
   io.to(code).emit('turn-changed', {
     activePlayerIndex: room.turnOrder[room.currentTurnIndex],
     state: serializeState(room),
@@ -176,17 +199,25 @@ function checkRoundOver(code) {
   const room = rooms.get(code);
   if (!room) return false;
 
-  const stillInRound = room.players.filter((_, i) => !room.passOrder.includes(i));
+  // Everyone is passed, either confirmed (in passOrder) or an as-yet
+  // unconsumed provisional pre-pass. Materialize any remaining provisionals in
+  // their scheduled slot order (their position in the live turn rotation) so
+  // the break screen and next round always see a complete pass order.
+  if (room.passOrder.length + room.pendingPass.length < room.players.length) return false;
 
-  if (stillInRound.length === 0) {
-    stopTimerTick(code);
-    room.phase = 'round-over';
-    persistRoom(code);
-    io.to(code).emit('round-over', { state: serializeState(room) });
-    return true;
+  for (const idx of [...room.turnOrder]) {
+    const pendPos = room.pendingPass.indexOf(idx);
+    if (pendPos !== -1) {
+      room.pendingPass.splice(pendPos, 1);
+      room.passOrder.push(idx);
+    }
   }
 
-  return false;
+  stopTimerTick(code);
+  room.phase = 'round-over';
+  persistRoom(code);
+  io.to(code).emit('round-over', { state: serializeState(room) });
+  return true;
 }
 
 function startNextRound(code) {
@@ -197,6 +228,7 @@ function startNextRound(code) {
   room.turnOrder = [...room.passOrder];
   room.currentTurnIndex = 0;
   room.passOrder = [];
+  room.pendingPass = [];
   room.phase = 'playing';
   room.paused = true;
   room.pausedBy = 'round-start';
@@ -224,6 +256,7 @@ function serializeState(room) {
     activePlayerIndex: room.turnOrder[room.currentTurnIndex],
     round: room.round,
     passOrder: room.passOrder,
+    pendingPass: room.pendingPass,
     phase: room.phase,
     paused: room.paused,
     pausedBy: room.pausedBy,
@@ -390,6 +423,7 @@ io.on('connection', (socket) => {
     room.phase = 'playing';
     room.round = 1;
     room.passOrder = [];
+    room.pendingPass = [];
     room.paused = false;
     room.pausedBy = null;
 
@@ -424,7 +458,7 @@ io.on('connection', (socket) => {
     // Any device may pass for any player
     const targetIdx = Number.isInteger(index) ? index : 0;
     const target = room.players[targetIdx];
-    if (!target || room.passOrder.includes(targetIdx)) return;
+    if (!target || room.passOrder.includes(targetIdx) || room.pendingPass.includes(targetIdx)) return;
 
     if (room.paused && room.pausedBy !== 'round-start') return;
 
@@ -432,17 +466,29 @@ io.on('connection', (socket) => {
       room.paused = false;
       room.pausedBy = null;
     }
-    room.passOrder.push(targetIdx);
 
-    const orderPos = room.turnOrder.indexOf(targetIdx);
-    if (orderPos !== -1) {
-      room.turnOrder.splice(orderPos, 1);
-      if (orderPos < room.currentTurnIndex) {
-        room.currentTurnIndex--;
+    const isActivePass = room.turnOrder[room.currentTurnIndex] === targetIdx;
+
+    if (isActivePass) {
+      // Passing on your own turn is a confirmed pass, recorded now.
+      room.passOrder.push(targetIdx);
+      const orderPos = room.turnOrder.indexOf(targetIdx);
+      if (orderPos !== -1) {
+        room.turnOrder.splice(orderPos, 1);
+        if (orderPos < room.currentTurnIndex) {
+          room.currentTurnIndex--;
+        }
+        if (room.currentTurnIndex >= room.turnOrder.length && room.turnOrder.length > 0) {
+          room.currentTurnIndex = 0;
+        }
       }
-      if (room.currentTurnIndex >= room.turnOrder.length && room.turnOrder.length > 0) {
-        room.currentTurnIndex = 0;
-      }
+      consumePendingAtTurn(currentRoom);
+    } else {
+      // Pre-passing before your turn is only provisional — it becomes a
+      // confirmed pass when the rotation reaches your turn slot (or the round
+      // ends), so the next round's order follows turn position, not who
+      // clicked first.
+      room.pendingPass.push(targetIdx);
     }
 
     persistRoom(currentRoom);
@@ -460,6 +506,22 @@ io.on('connection', (socket) => {
     if (!room || room.phase !== 'playing') return;
 
     const targetIdx = Number.isInteger(index) ? index : 0;
+
+    // Provisional pre-pass: just withdraw the provisional pass — the player
+    // stays in the rotation at their turn slot.
+    const pendPos = room.pendingPass.indexOf(targetIdx);
+    if (pendPos !== -1) {
+      room.pendingPass.splice(pendPos, 1);
+      persistRoom(currentRoom);
+      io.to(currentRoom).emit('player-unpassed', {
+        playerIndex: targetIdx,
+        state: serializeState(room),
+      });
+      return;
+    }
+
+    // Confirmed pass: put the player back into the rotation right after the
+    // current turn.
     const passPos = room.passOrder.indexOf(targetIdx);
     if (passPos === -1) return;
 
@@ -554,6 +616,7 @@ io.on('connection', (socket) => {
     room.currentTurnIndex = 0;
     room.round = 1;
     room.passOrder = [];
+    room.pendingPass = [];
     room.phase = 'lobby';
     room.paused = false;
     room.pausedBy = null;
