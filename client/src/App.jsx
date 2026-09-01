@@ -1029,8 +1029,8 @@ function GameOverPage() {
         )}
 
         <div className="game-over-actions">
-          <Button onClick={nextRound}>Next Round</Button>
-          <Button variant="secondary" onClick={resetGame}>New Game</Button>
+          {isRoundOver && <Button onClick={nextRound}>Next Round</Button>}
+          {!isRoundOver && <Button variant="secondary" onClick={resetGame}>New Game</Button>}
         </div>
       </div>
     </div>
