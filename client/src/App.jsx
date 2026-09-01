@@ -647,14 +647,6 @@ function GamePage() {
           <Badge variant="outline">Round {state.round}</Badge>
         </div>
 
-        {state.phase === 'playing' && state.paused && (
-          <div className="paused-banner">
-            {state.pausedBy === 'round-start'
-              ? 'Clocks paused — the first turn of the round resumes them'
-              : 'Paused — press Resume to continue'}
-          </div>
-        )}
-
         <Collapsible title="How to join">
               <div className="share-section">
                 <div className="share-link-row" onClick={() => {
@@ -721,7 +713,12 @@ function GamePage() {
 
         {state.phase === 'playing' && (
           <div className="pause-control">
-            <Button variant="warning" size="sm" onClick={togglePause} className="btn-pause">
+            <Button
+              variant={state.paused ? 'success' : 'warning'}
+              size="sm"
+              onClick={togglePause}
+              className="btn-pause w-full"
+            >
               {state.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
               {state.paused ? 'Resume' : 'Pause'}
             </Button>
@@ -792,7 +789,7 @@ function GamePage() {
               <div className={`player-timer ${isLow ? 'low' : ''} ${isOT ? 'overtime' : ''}`}>{formatTime(timer)}</div>
               {state.paused && isActive && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="warning" size="sm" onClick={togglePause}>
+                  <Button variant="success" size="sm" onClick={togglePause}>
                     <Play className="size-4" />Resume
                   </Button>
                 </div>
