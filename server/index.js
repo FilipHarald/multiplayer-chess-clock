@@ -36,6 +36,11 @@ function loadRooms() {
       const room = JSON.parse(row.data);
       room.timerInterval = null;
       room.devices = [];
+      // Normalize fields that older persisted rooms may lack — all consumers
+      // (serializeState, pass/unpass handlers, client rendering) assume these
+      // arrays exist.
+      room.passOrder ??= [];
+      room.pendingPass ??= [];
       loaded.push(room);
     } catch { /* skip corrupt row */ }
   }
@@ -255,8 +260,8 @@ function serializeState(room) {
     currentTurnIndex: room.currentTurnIndex,
     activePlayerIndex: room.turnOrder[room.currentTurnIndex],
     round: room.round,
-    passOrder: room.passOrder,
-    pendingPass: room.pendingPass,
+    passOrder: room.passOrder ?? [],
+    pendingPass: room.pendingPass ?? [],
     phase: room.phase,
     paused: room.paused,
     pausedBy: room.pausedBy,
