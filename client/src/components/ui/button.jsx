@@ -12,6 +12,7 @@ const buttonVariants = cva(
         destructive: 'bg-destructive text-white hover:bg-destructive/90',
         outline: 'border border-border bg-transparent text-foreground hover:bg-secondary',
         success: 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
+        warning: 'border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
       },
       size: {
         default: 'h-12 px-6 text-base',

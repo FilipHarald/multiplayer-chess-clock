@@ -9,7 +9,7 @@ import { Card } from './components/ui/card';
 import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
-import { Check, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Check, Copy, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
@@ -645,14 +645,6 @@ function GamePage() {
       <div className="game">
         <div className="round-header">
           <Badge variant="outline">Round {state.round}</Badge>
-          {state.phase === 'playing' && (
-            <Button
-              variant={state.paused ? 'success' : 'outline'} size="sm"
-              onClick={togglePause}
-            >
-              {state.paused ? 'Resume' : 'Pause'}
-            </Button>
-          )}
         </div>
 
         {state.phase === 'playing' && state.paused && (
@@ -727,6 +719,15 @@ function GamePage() {
           </div>
         )}
 
+        {state.phase === 'playing' && (
+          <div className="pause-control">
+            <Button variant="warning" size="sm" onClick={togglePause} className="btn-pause">
+              {state.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+              {state.paused ? 'Resume' : 'Pause'}
+            </Button>
+          </div>
+        )}
+
         {state.players.map((p, origIdx) => {
           const isActive = activeIdx === origIdx;
           const hasPassed = state.passOrder.includes(origIdx);
@@ -734,19 +735,20 @@ function GamePage() {
           const timer = timers[origIdx] ?? p.timerMs;
           const isOT = overtime[origIdx] ?? p.overtime;
           const isLow = timer < 30000 && timer > 0 && !isOT;
-          const canAct = state.phase === 'playing' && !hasPassed;
+          const canAct = state.phase === 'playing' && !hasPassed && !state.paused;
 
           let cardClass = 'player-card';
           if (isActive) cardClass += ' active';
           if (hasPassed) cardClass += ' passed';
           if (isOT) cardClass += ' overtime';
+          if (state.paused) cardClass += ' paused';
 
           return (
             <Card
               key={origIdx}
               className={cardClass}
               style={{ '--player-color': p.color }}
-              onClick={isActive && state.phase === 'playing' ? endTurn : undefined}
+              onClick={isActive && state.phase === 'playing' && !state.paused ? endTurn : undefined}
             >
               <div className="player-info">
                 {editingPlayer === origIdx ? (
@@ -788,6 +790,13 @@ function GamePage() {
                 </div>
               </div>
               <div className={`player-timer ${isLow ? 'low' : ''} ${isOT ? 'overtime' : ''}`}>{formatTime(timer)}</div>
+              {state.paused && isActive && (
+                <div className="card-actions" onClick={(e) => e.stopPropagation()}>
+                  <Button variant="warning" size="sm" onClick={togglePause}>
+                    <Play className="size-4" />Resume
+                  </Button>
+                </div>
+              )}
               {canAct && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                   {isActive && (
