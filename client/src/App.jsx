@@ -9,7 +9,7 @@ import { Card } from './components/ui/card';
 import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
-import { Check, ChevronDown, Copy, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2 } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
@@ -609,6 +609,47 @@ function NewRoom() {
   );
 }
 
+function GameTopBar({ code, round }) {
+  const [copyState, setCopyState] = useState('idle');
+  const [qrOpen, setQrOpen] = useState(false);
+  const shareLink = `${window.location.origin}/room/${code}`;
+
+  const handleCopyLink = useCallback(() => {
+    copyToClipboard(shareLink).then(ok => {
+      setCopyState(ok ? 'copied' : 'failed');
+      setTimeout(() => setCopyState('idle'), 2000);
+    });
+  }, [shareLink]);
+
+  return (
+    <div className="game-topbar">
+      <div className="topbar-round">
+        <Badge variant="outline">Round {round}</Badge>
+      </div>
+      <div className="topbar-actions">
+        <Button variant="ghost" size="icon" onClick={handleCopyLink} title="Copy room link" aria-label="Copy room link">
+          {copyState === 'copied' ? <Check className="size-4" /> : <Link className="size-4" />}
+        </Button>
+        {copyState !== 'idle' && (
+          <span className={`copy-feedback ${copyState}`} role="status">
+            {copyState === 'copied' ? 'Copied!' : 'Failed'}
+          </span>
+        )}
+        <Button variant="ghost" size="icon" onClick={() => setQrOpen(o => !o)} title="Show QR code" aria-label="Show QR code">
+          <QrCode className="size-4" />
+          {qrOpen ? <ChevronUp className="topbar-qr-caret" /> : null}
+        </Button>
+      </div>
+      {qrOpen && (
+        <button className="topbar-qr" type="button" onClick={() => setQrOpen(false)} aria-label="Hide QR code">
+          <QRCodeSVG value={shareLink} size={128} bgColor="#16213e" fgColor="#eee" />
+          <ChevronUp className="topbar-qr-caret collapse-hint" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function GamePage() {
   const { socket, connected } = useSocket();
   const { code } = useParams();
@@ -621,7 +662,6 @@ function GamePage() {
   const prevActiveRef = useRef(null);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editName, setEditName] = useState('');
-  const [copyState, setCopyState] = useState('idle');
 
   useEffect(() => {
     const s = socket.current;
@@ -716,28 +756,7 @@ function GamePage() {
   return (
     <div className="app">
       <div className="game">
-        <div className="round-header">
-          <Badge variant="outline">Round {state.round}</Badge>
-        </div>
-
-        <Collapsible title="How to join">
-              <div className="share-section">
-                <div className="share-link-row" onClick={() => {
-                  copyToClipboard(`${window.location.origin}/room/${code}`).then(ok => {
-                    setCopyState(ok ? 'copied' : 'failed');
-                    setTimeout(() => setCopyState('idle'), 2000);
-                  });
-                }}>
-                  <span className="share-link-text">{`${window.location.origin}/room/${code}`}</span>
-                  <Copy className="copy-glyph" aria-label="Copy link" />
-                  {copyState === 'copied' && <span className="copy-feedback copied">Copied!</span>}
-                  {copyState === 'failed' && <span className="copy-feedback failed">Failed</span>}
-                </div>
-                <div className="qr-code">
-                  <QRCodeSVG value={`${window.location.origin}/room/${code}`} size={128} bgColor="#16213e" fgColor="#eee" />
-                </div>
-              </div>
-        </Collapsible>
+        <GameTopBar code={code} round={state.round} />
 
         <div className="turn-order">
           {state.turnOrder.map((pIdx) => (
