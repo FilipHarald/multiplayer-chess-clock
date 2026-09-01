@@ -773,13 +773,16 @@ function GamePage() {
             {upcomingRemaining.length > 0 && (
               <>
                 <div className="upcoming-label">Up next</div>
-                {upcomingRemaining.map((pIdx, pos) => (
-                  <div key={pIdx} className="upcoming-item">
-                    <span className="upcoming-pos">{pos + 1}.</span>
-                    <div className="player-dot" style={{ background: state.players[pIdx].color }} />
-                    <span className="upcoming-name">{state.players[pIdx].name}</span>
-                  </div>
-                ))}
+                {upcomingRemaining.map((pIdx, pos) => {
+                  const isPending = state.pendingPass.includes(pIdx);
+                  return (
+                    <div key={pIdx} className={`upcoming-item${isPending ? ' queued-item' : ''}`}>
+                      <span className="upcoming-pos">{pos + 1}.</span>
+                      <div className="player-dot" style={{ background: state.players[pIdx].color }} />
+                      <span className="upcoming-name">{state.players[pIdx].name}{isPending ? ' (queued)' : ''}</span>
+                    </div>
+                  );
+                })}
               </>
             )}
             {allPassed.length > 0 && (
