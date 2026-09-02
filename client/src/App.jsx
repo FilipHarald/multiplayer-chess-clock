@@ -1015,16 +1015,6 @@ function GamePage({ soundEnabled }) {
                     >
                       <Pencil className="size-4" />
                     </Button>
-                    <Button
-                      variant="ghost" size="icon"
-                      className={notificationsEnabled ? 'preference-toggle enabled' : 'preference-toggle'}
-                      title={notificationsEnabled ? `Notifications enabled for ${p.name}` : `Notifications disabled for ${p.name}`}
-                      aria-label={notificationsEnabled ? `Disable notifications for ${p.name}` : `Enable notifications for ${p.name}`}
-                      aria-pressed={notificationsEnabled}
-                      onClick={(e) => { e.stopPropagation(); togglePlayerNotification(origIdx); }}
-                    >
-                      {notificationsEnabled ? <Bell className="size-4" /> : <BellOff className="size-4" />}
-                    </Button>
                   </div>
                 )}
                 {isOT && <Badge variant="outline" className="overtime-badge">Overtime</Badge>}
@@ -1039,11 +1029,29 @@ function GamePage({ soundEnabled }) {
                   ) : null}
                 </div>
               </div>
-              {canAct && (
-                <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="outline" size="sm" onClick={() => pass(origIdx)}>Pass</Button>
-                </div>
-              )}
+              <div className="card-actions">
+                {canAct && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="btn-pass"
+                    onClick={(e) => { e.stopPropagation(); pass(origIdx); }}
+                  >
+                    Pass
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="player-notification-toggle"
+                  title={notificationsEnabled ? `Notifications enabled for ${p.name}` : `Notifications disabled for ${p.name}`}
+                  aria-label={notificationsEnabled ? `Disable notifications for ${p.name}` : `Enable notifications for ${p.name}`}
+                  aria-pressed={notificationsEnabled}
+                  onClick={(e) => { e.stopPropagation(); togglePlayerNotification(origIdx); }}
+                >
+                  {notificationsEnabled ? <Bell className="size-4" /> : <BellOff className="size-4" />}
+                </Button>
+              </div>
             </Card>
           );
         })}
@@ -1229,12 +1237,14 @@ export default function App() {
     <BrowserRouter>
       <SocketProvider>
         <AppHeader soundEnabled={soundEnabled} onSoundToggle={toggleSound} />
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/room/:code" element={<NewRoom />} />
-          <Route path="/game/:code" element={<GamePage soundEnabled={soundEnabled} />} />
-          <Route path="/gameover/:code" element={<GameOverPage />} />
-        </Routes>
+        <div className="app-content">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/room/:code" element={<NewRoom />} />
+            <Route path="/game/:code" element={<GamePage soundEnabled={soundEnabled} />} />
+            <Route path="/gameover/:code" element={<GameOverPage />} />
+          </Routes>
+        </div>
         <div className="version-footer">{__APP_VERSION__}</div>
       </SocketProvider>
     </BrowserRouter>
