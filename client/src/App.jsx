@@ -10,13 +10,15 @@ import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
 import { Dialog, DialogClose, DialogTitle } from './components/ui/dialog';
-import { Bell, BellOff, Check, ChevronDown, CircleHelp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX, X } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronDown, CircleHelp, Copy, Link, MonitorSmartphone, Pause, Pencil, Play, Plus, QrCode, Trash2, UserRound, Volume2, VolumeX, X } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
   ? 'http://localhost:3002'
   : window.location.origin;
 const SOUND_ENABLED_KEY = 'mcc-sound-enabled';
+const ROOM_HISTORY_KEY = 'mcc-room-history';
+const MAX_ROOM_HISTORY = 100;
 
 function getSoundEnabled() {
   return localStorage.getItem(SOUND_ENABLED_KEY) !== 'false';
@@ -77,6 +79,32 @@ function getDeviceName() {
     localStorage.setItem('mcc-device-name', name);
   }
   return name;
+}
+
+function getRoomHistory() {
+  try {
+    const history = JSON.parse(localStorage.getItem(ROOM_HISTORY_KEY) || '[]');
+    if (!Array.isArray(history)) return [];
+    const seen = new Set();
+    return history.filter(entry => {
+      if (!entry || typeof entry.code !== 'string') return false;
+      const code = entry.code.toUpperCase();
+      if (!/^[A-Z2-9]{8}$/.test(code) || seen.has(code)) return false;
+      entry.code = code;
+      seen.add(code);
+      return true;
+    }).slice(0, MAX_ROOM_HISTORY);
+  } catch {
+    return [];
+  }
+}
+
+function rememberRoom(state) {
+  if (!state?.code) return;
+  const code = state.code.toUpperCase();
+  const history = getRoomHistory().filter(entry => entry.code !== code);
+  history.unshift({ code, createdAt: Number(state.createdAt) || Date.now() });
+  localStorage.setItem(ROOM_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_ROOM_HISTORY)));
 }
 
 function fallbackCopy(text) {
@@ -291,17 +319,27 @@ function HomePage() {
   const [error, setError] = useState('');
   const [searchParams] = useSearchParams();
   const autoJoinDone = useRef(false);
-  const [publicRooms, setPublicRooms] = useState([]);
+  const [knownRooms, setKnownRooms] = useState([]);
 
   const deviceName = getDeviceName();
 
   useEffect(() => {
-    fetch('/api/rooms').then(r => r.json()).then(setPublicRooms).catch(() => {});
-    const interval = setInterval(() => {
-      fetch('/api/rooms').then(r => r.json()).then(setPublicRooms).catch(() => {});
-    }, 5000);
+    if (!connected || !socket.current) return;
+    const refreshRooms = () => {
+      const history = getRoomHistory();
+      if (history.length === 0) {
+        setKnownRooms([]);
+        return;
+      }
+      socket.current.emit('get-room-metadata', { codes: history.map(room => room.code) }, (res) => {
+        const rooms = Array.isArray(res?.rooms) ? res.rooms : [];
+        setKnownRooms(rooms.sort((a, b) => b.createdAt - a.createdAt));
+      });
+    };
+    refreshRooms();
+    const interval = setInterval(refreshRooms, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [connected, socket]);
 
   // Auto-join from URL ?room=CODE
   useEffect(() => {
@@ -311,6 +349,7 @@ function HomePage() {
       const s = socket.current;
       s.emit('join-room', { code: roomCode.toUpperCase(), name: deviceName, deviceId: getDeviceId() }, (res) => {
         if (res.error) { setError(res.error); autoJoinDone.current = false; return; }
+        rememberRoom(res.state);
         navigate(`/room/${roomCode.toUpperCase()}`, { state: { state: res.state } });
       });
     }
@@ -326,6 +365,7 @@ function HomePage() {
       deviceId: getDeviceId(),
     }, (res) => {
       if (res.error) { setError(res.error); return; }
+      rememberRoom(res.state);
       navigate(`/room/${res.state.code}`, { state: { state: res.state } });
     });
   }, [navigate, socket, deviceName]);
@@ -335,23 +375,31 @@ function HomePage() {
       <section className="setup rounded-2xl border border-border bg-card/70 px-5 shadow-2xl shadow-black/20 backdrop-blur sm:px-8">
         <h1>Multiplayer Chess Clock</h1>
         <p className="home-description">
-          A shared clock for board games. Create a room and share the link — any device with the link can join and control the clocks.
+          A shared clock for board games with support for pass turn order. Create a room and share the link — any device with the link can join and control the clocks. Greatly inspired by{' '}
+          <a href="https://multiplayerchessclock.com" target="_blank" rel="noopener noreferrer">
+            https://multiplayerchessclock.com
+          </a>.
         </p>
 
         <Button className="w-full" onClick={createRoom} disabled={!connected}>
           {connected ? 'New Room' : 'Connecting...'}
         </Button>
 
-        {publicRooms.length > 0 && (
+        {knownRooms.length > 0 && (
           <>
-            <div className="divider">public rooms</div>
+            <div className="divider">your rooms</div>
             <div className="public-rooms">
-              {publicRooms.map(room => (
+              {knownRooms.map(room => (
                 <Card key={room.code} className="public-room-item" onClick={() => navigate(`/room/${room.code}`)}>
                   <div className="public-room-code">{room.code}</div>
                   <div className="public-room-meta">
-                    <span>{room.deviceCount} device{room.deviceCount !== 1 ? 's' : ''}</span>
-                    <Badge variant="secondary" className="public-room-phase">{room.phase}</Badge>
+                    <span className="room-count" title={`${room.playerCount} player${room.playerCount !== 1 ? 's' : ''}`}>
+                      <UserRound /> {room.playerCount}
+                    </span>
+                    <span className="room-count" title={`${room.deviceCount} connected device${room.deviceCount !== 1 ? 's' : ''}`}>
+                      <MonitorSmartphone /> {room.deviceCount}
+                    </span>
+                    <Badge variant="secondary" className="public-room-phase">{room.phase === 'lobby' ? 'Lobby' : 'Playing'}</Badge>
                   </div>
                 </Card>
               ))}
@@ -382,6 +430,7 @@ function NewRoom() {
 
     s.emit('join-room', { code, name: deviceName, deviceId: getDeviceId() }, (res) => {
       if (res.error) { setError(res.error); joinedRef.current = false; return; }
+      rememberRoom(res.state);
       if (res.state.phase === 'playing' || res.state.phase === 'game-over' || res.state.phase === 'round-over') {
         navigate(`/game/${code}`, { state: { state: res.state } });
         return;
@@ -750,6 +799,7 @@ function GamePage({ soundEnabled }) {
 
     s.emit('join-room', { code, name: deviceName, deviceId: getDeviceId() }, (res) => {
       if (res.error) return;
+      rememberRoom(res.state);
       setState(res.state);
       setTimers(res.state.players.map(p => p.timerMs));
       setOvertime(res.state.players.map(p => p.overtime));
@@ -1081,6 +1131,7 @@ function GameOverPage() {
 
     s.emit('join-room', { code, name: deviceName, deviceId: getDeviceId() }, (res) => {
       if (res.error) return;
+      rememberRoom(res.state);
       setState(res.state);
     });
   }, [code, socket, connected, navigate, deviceName]);

@@ -36,6 +36,7 @@ function loadRooms() {
       const room = JSON.parse(row.data);
       room.timerInterval = null;
       room.devices = [];
+      room.createdAt ??= row.created_at;
       // Normalize fields that older persisted rooms may lack — all consumers
       // (serializeState, pass/unpass handlers, client rendering) assume these
       // arrays exist.
@@ -246,6 +247,7 @@ function startNextRound(code) {
 function serializeState(room) {
   return {
     code: room.code,
+    createdAt: room.createdAt,
     players: room.players.map((p, i) => ({
       index: i,
       name: p.name,
@@ -276,6 +278,26 @@ function serializeState(room) {
 
 io.on('connection', (socket) => {
   let currentRoom = null;
+
+  socket.on('get-room-metadata', ({ codes } = {}, cb) => {
+    if (typeof cb !== 'function' || !Array.isArray(codes) || codes.length > 100) return;
+
+    const metadata = [];
+    const uniqueCodes = new Set(codes.map(code => typeof code === 'string' ? code.toUpperCase() : ''));
+    for (const code of uniqueCodes) {
+      if (!/^[A-Z2-9]{8}$/.test(code)) continue;
+      const room = rooms.get(code);
+      if (!room) continue;
+      metadata.push({
+        code,
+        deviceCount: room.devices.length,
+        playerCount: room.players.length,
+        phase: room.phase,
+        createdAt: room.createdAt,
+      });
+    }
+    cb({ rooms: metadata });
+  });
 
   socket.on('create-room', ({ minutesPerPlayer, settings, name, deviceId }, cb) => {
     const room = createRoom(minutesPerPlayer || 60, settings);
@@ -666,23 +688,6 @@ io.on('connection', (socket) => {
 
 // Serve static client in production
 app.use(express.static(join(__dirname, '../client/dist')));
-
-// List public rooms
-app.get('/api/rooms', (req, res) => {
-  const publicRooms = [];
-  for (const [code, room] of rooms) {
-    if (room.settings.public) {
-      publicRooms.push({
-        code,
-        deviceCount: room.devices.length,
-        playerCount: room.players.length,
-        phase: room.phase,
-        createdAt: room.createdAt,
-      });
-    }
-  }
-  res.json(publicRooms);
-});
 
 // SPA fallback
 app.get('*', (req, res) => {
