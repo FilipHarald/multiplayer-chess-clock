@@ -918,6 +918,7 @@ function GamePage({ soundEnabled }) {
                   className="pause-reason-toggle"
                   aria-label="Show pause reason"
                   aria-expanded={pauseReasonOpen}
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     setPauseReasonOpen(open => !open);
