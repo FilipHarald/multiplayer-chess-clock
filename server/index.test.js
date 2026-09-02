@@ -63,6 +63,12 @@ try {
   const socket = io(`http://127.0.0.1:${port}`, { transports: ['websocket'] });
   await once(socket, 'connect');
 
+  let defaultResponse = await emit(socket, 'create-room', { deviceId: 'defaults-device' });
+  assert.equal(defaultResponse.state.minutesPerPlayer, 60);
+  assert.equal(defaultResponse.state.settings.timerMode, 'countdown');
+  assert.equal(defaultResponse.state.settings.orderMode, 'normal');
+  assert.equal(defaultResponse.state.settings.allowPass, false);
+
   let response = await emit(socket, 'create-room', {
     minutesPerPlayer: 60,
     settings: { orderMode: 'normal', allowPass: true },
@@ -72,8 +78,15 @@ try {
   assert.equal(response.state.settings.allowPass, true);
   assert.equal(response.state.settings.timerMode, 'countdown');
 
+  socket.emit('update-settings', { orderMode: 'pass-order' });
+  let state = await waitForState(socket, next => next.settings.orderMode === 'pass-order');
+  assert.equal(state.settings.allowPass, true);
+  socket.emit('update-settings', { orderMode: 'normal' });
+  state = await waitForState(socket, next => next.settings.orderMode === 'normal');
+  assert.equal(state.settings.allowPass, true);
+
   socket.emit('start-game');
-  let state = (await once(socket, 'game-started'))[0].state;
+  state = (await once(socket, 'game-started'))[0].state;
   assert.deepEqual(state.turnOrder, [0, 1]);
   state = await runRound(socket, [1, 0]);
   assert.deepEqual(state.passOrder, [0, 1]);

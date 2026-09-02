@@ -49,6 +49,7 @@ function loadRooms() {
       room.settings.allowPass = room.settings.orderMode === 'pass-order'
         ? true
         : room.settings.allowPass === true;
+      room.settings.normalAllowPass ??= room.settings.orderMode === 'normal' && room.settings.allowPass;
       loaded.push(room);
     } catch { /* skip corrupt row */ }
   }
@@ -127,8 +128,9 @@ function createRoom(minutesPerPlayer, settings = {}) {
     settings: {
       public: settings.public ?? true,
       timerMode: settings.timerMode === 'count-up' ? 'count-up' : 'countdown',
-      orderMode: settings.orderMode === 'normal' ? 'normal' : 'pass-order',
+      orderMode: settings.orderMode === 'pass-order' ? 'pass-order' : 'normal',
       allowPass: settings.orderMode === 'normal' && settings.allowPass === true,
+      normalAllowPass: settings.allowPass === true,
     },
   };
 
@@ -626,6 +628,9 @@ io.on('connection', (socket) => {
       room.settings.allowPass = true;
     } else if (typeof settings.allowPass === 'boolean') {
       room.settings.allowPass = settings.allowPass;
+      room.settings.normalAllowPass = settings.allowPass;
+    } else {
+      room.settings.allowPass = room.settings.normalAllowPass === true;
     }
 
     persistRoom(currentRoom);

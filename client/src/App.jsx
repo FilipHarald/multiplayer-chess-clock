@@ -10,7 +10,7 @@ import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
 import { Dialog, DialogClose, DialogTitle } from './components/ui/dialog';
-import { Bell, BellOff, Check, ChevronDown, CircleHelp, Copy, Link, MonitorSmartphone, Pause, Pencil, Play, Plus, QrCode, Trash2, UserRound, Volume2, VolumeX, X } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronDown, CircleHelp, Clock3, Copy, Hourglass, Link, MonitorSmartphone, Pause, Pencil, Play, Plus, QrCode, Trash2, UserRound, Volume2, VolumeX, X } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
@@ -364,7 +364,7 @@ function HomePage() {
     if (!s) return;
     s.emit('create-room', {
       minutesPerPlayer: 60,
-      settings: { public: true },
+      settings: { public: true, timerMode: 'countdown', orderMode: 'normal', allowPass: false },
       name: deviceName,
       deviceId: getDeviceId(),
     }, (res) => {
@@ -556,12 +556,11 @@ function NewRoom() {
     <div className="app">
       <div className="waiting">
         <div className="room-code-header">
-          <Badge variant="outline" className="mb-2">Room</Badge>
-          <h2>{code}</h2>
+          <span>Room</span>
+          <strong>{code}</strong>
         </div>
 
-        {/* How to join - collapsible, default closed */}
-        <Collapsible title="How to join">
+        <Collapsible title="How to join" defaultOpen>
               <div className="share-section">
                 <div className="share-link-row" onClick={handleCopyLink}>
                   <span className="share-link-text">{shareLink}</span>
@@ -575,50 +574,7 @@ function NewRoom() {
               </div>
         </Collapsible>
 
-        {/* Time info */}
-        <Card className={`time-info${isCountUp ? ' time-info-unlimited' : ''}`}>
-          <div className="time-info-row">
-            <span>Time per player:</span>
-            <div className="time-edit-row">
-              <Input
-                type="number"
-                className="time-info-input"
-                value={minutesPerPlayer}
-                disabled={isCountUp}
-                onChange={e => {
-                  const val = parseInt(e.target.value, 10);
-                  if (val >= 1 && val <= 999) {
-                    socket.current?.emit('update-time', { minutesPerPlayer: val });
-                  }
-                }}
-                min={1}
-                max={999}
-              />
-              <span>{isCountUp ? 'Not applicable' : 'min'}</span>
-            </div>
-          </div>
-          <div className="time-info-row">
-            <span>Total max time:</span>
-            <span>{isCountUp ? 'Unlimited' : (() => {
-              const total = state.players.length * minutesPerPlayer;
-              return `${Math.floor(total / 60)}h ${total % 60}m`;
-            })()}</span>
-          </div>
-          <div className="time-info-row">
-            <span>Expected end time:</span>
-            <span>{isCountUp ? 'Not applicable' : (() => {
-              const totalMs = state.players.length * minutesPerPlayer * 60 * 1000;
-              return new Date(Date.now() + totalMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            })()}</span>
-          </div>
-          <div className="time-info-row">
-            <span>Connected devices:</span>
-            <span>{deviceCount}</span>
-          </div>
-        </Card>
-
-        {/* Settings - collapsible, default closed */}
-        <Collapsible title="Settings">
+        <Collapsible title="Settings" defaultOpen>
               <div className="checkbox-group">
                 <div className="settings-order-row">
                   <label htmlFor="timer-mode">Timer mode</label>
@@ -643,11 +599,8 @@ function NewRoom() {
                   <Select
                     id="order-mode"
                     className="settings-dropdown"
-                    value={state.settings?.orderMode || 'pass-order'}
-                    onChange={e => socket.current?.emit('update-settings', {
-                      orderMode: e.target.value,
-                      ...(e.target.value === 'normal' ? { allowPass: false } : {}),
-                    })}
+                    value={state.settings?.orderMode || 'normal'}
+                    onChange={e => socket.current?.emit('update-settings', { orderMode: e.target.value })}
                   >
                     <option value="pass-order">Pass order</option>
                     <option value="normal">Normal</option>
@@ -670,6 +623,51 @@ function NewRoom() {
                   />
                   Allow users to pass
                 </label>
+                <div className={`settings-time-row${isCountUp ? ' muted-option' : ''}`}>
+                  <label htmlFor="minutes-per-player">Time per player</label>
+                  <div className="time-edit-row">
+                    <Input
+                      id="minutes-per-player"
+                      type="number"
+                      className="time-info-input"
+                      value={minutesPerPlayer}
+                      disabled={isCountUp}
+                      onChange={e => {
+                        const val = parseInt(e.target.value, 10);
+                        if (val >= 1 && val <= 999) {
+                          socket.current?.emit('update-time', { minutesPerPlayer: val });
+                        }
+                      }}
+                      min={1}
+                      max={999}
+                    />
+                    <span>min</span>
+                  </div>
+                </div>
+                <Card className="time-info settings-stats">
+                  {!isCountUp && (
+                    <>
+                      <div className="time-info-row">
+                        <span>Total max time:</span>
+                        <span className="stat-value">{(() => {
+                          const total = state.players.length * minutesPerPlayer;
+                          return `${Math.floor(total / 60)}h ${total % 60}m`;
+                        })()} <Hourglass aria-hidden="true" /></span>
+                      </div>
+                      <div className="time-info-row">
+                        <span>Expected end time:</span>
+                        <span className="stat-value">{(() => {
+                          const totalMs = state.players.length * minutesPerPlayer * 60 * 1000;
+                          return new Date(Date.now() + totalMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        })()} <Clock3 aria-hidden="true" /></span>
+                      </div>
+                    </>
+                  )}
+                  <div className="time-info-row">
+                    <span>Connected devices:</span>
+                    <span className="stat-value">{deviceCount} <MonitorSmartphone aria-hidden="true" /></span>
+                  </div>
+                </Card>
               </div>
         </Collapsible>
 
