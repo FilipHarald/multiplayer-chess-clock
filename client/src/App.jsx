@@ -983,6 +983,13 @@ function GamePage({ soundEnabled }) {
                   <div className="player-name-row">
                     <div className="player-name" style={{ color: p.color }}>{p.name}</div>
                     <Button
+                      variant="ghost" size="icon" className="btn-rename"
+                      title="Rename player"
+                      onClick={(e) => { e.stopPropagation(); handleStartEdit(origIdx); }}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
                       variant="ghost" size="icon"
                       className={notificationsEnabled ? 'preference-toggle enabled' : 'preference-toggle'}
                       title={notificationsEnabled ? `Notifications enabled for ${p.name}` : `Notifications disabled for ${p.name}`}
@@ -991,13 +998,6 @@ function GamePage({ soundEnabled }) {
                       onClick={(e) => { e.stopPropagation(); togglePlayerNotification(origIdx); }}
                     >
                       {notificationsEnabled ? <Bell className="size-4" /> : <BellOff className="size-4" />}
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon" className="btn-rename"
-                      title="Rename player"
-                      onClick={(e) => { e.stopPropagation(); handleStartEdit(origIdx); }}
-                    >
-                      <Pencil className="size-4" />
                     </Button>
                   </div>
                 )}
