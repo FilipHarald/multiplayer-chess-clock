@@ -556,8 +556,13 @@ function NewRoom() {
     <div className="app">
       <div className="waiting">
         <div className="room-code-header">
-          <span>Room</span>
-          <strong>{code}</strong>
+          <div className="room-code-title">
+            <span>Room</span>
+            <strong>{code}</strong>
+          </div>
+          <span className="lobby-device-count" title={`${deviceCount} connected device${deviceCount !== 1 ? 's' : ''}`}>
+            {deviceCount} <MonitorSmartphone aria-hidden="true" />
+          </span>
         </div>
 
         <Collapsible title="How to join" defaultOpen>
@@ -644,9 +649,8 @@ function NewRoom() {
                     <span>min</span>
                   </div>
                 </div>
-                <Card className="time-info settings-stats">
-                  {!isCountUp && (
-                    <>
+                {!isCountUp && (
+                  <Card className="time-info settings-stats">
                       <div className="time-info-row">
                         <span>Total max time:</span>
                         <span className="stat-value">{(() => {
@@ -661,13 +665,8 @@ function NewRoom() {
                           return new Date(Date.now() + totalMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         })()} <Clock3 aria-hidden="true" /></span>
                       </div>
-                    </>
-                  )}
-                  <div className="time-info-row">
-                    <span>Connected devices:</span>
-                    <span className="stat-value">{deviceCount} <MonitorSmartphone aria-hidden="true" /></span>
-                  </div>
-                </Card>
+                  </Card>
+                )}
               </div>
         </Collapsible>
 
