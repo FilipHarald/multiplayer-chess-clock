@@ -819,6 +819,7 @@ function GamePage({ soundEnabled }) {
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editName, setEditName] = useState('');
   const [pauseReasonOpen, setPauseReasonOpen] = useState(false);
+  const [passReminder, setPassReminder] = useState(0);
 
   useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
   useEffect(() => { subscriptionsRef.current = subscriptions; }, [subscriptions]);
@@ -945,6 +946,7 @@ function GamePage({ soundEnabled }) {
   // indicated immediately so the UI reflects what happened.
   const allPassed = [...state.passOrder, ...state.pendingPass];
   const canPass = state.settings?.orderMode === 'pass-order' || state.settings?.allowPass === true;
+  const isLastUnpassed = canPass && state.players.filter((_, index) => !allPassed.includes(index)).length === 1;
   const isCountUp = state.settings?.timerMode === 'count-up';
 
   return (
@@ -981,7 +983,7 @@ function GamePage({ soundEnabled }) {
             )}
             {canPass && allPassed.length > 0 && (
               <>
-                <div className="upcoming-divider">Passed</div>
+                {!isLastUnpassed && <div className="upcoming-divider">Passed</div>}
                 {allPassed.map((pIdx) => {
                   const passPos = state.passOrder.indexOf(pIdx);
                   const isPending = state.pendingPass.includes(pIdx);
@@ -1058,7 +1060,12 @@ function GamePage({ soundEnabled }) {
           const isLow = !isCountUp && timer < 30000 && timer > 0 && !isOT;
           const canAct = canPass && state.phase === 'playing' && !hasPassed && !state.paused;
           const canPressCard = isActive && state.phase === 'playing';
-          const handleCardPress = state.paused ? togglePause : endTurn;
+          const needsPass = isActive && isLastUnpassed && !state.paused;
+          const handleCardPress = state.paused
+            ? togglePause
+            : needsPass
+              ? () => setPassReminder(reminder => reminder + 1)
+              : endTurn;
 
           let cardClass = 'player-card';
           if (isActive) cardClass += ' active';
@@ -1081,7 +1088,7 @@ function GamePage({ soundEnabled }) {
               } : undefined}
               role={canPressCard ? 'button' : undefined}
               tabIndex={canPressCard ? 0 : undefined}
-              aria-label={canPressCard ? `${p.name}: ${state.paused ? 'resume' : 'end turn'}` : undefined}
+              aria-label={canPressCard ? `${p.name}: ${state.paused ? 'resume' : needsPass ? 'press the Pass button to end the round' : 'end turn'}` : undefined}
             >
               <div className="player-info">
                 {editingPlayer === origIdx ? (
@@ -1118,7 +1125,13 @@ function GamePage({ soundEnabled }) {
                   {hasPassed ? (
                     <Badge variant="secondary">{isPending ? 'Pass queued' : `Passed${passPosition !== -1 ? ` #${passPosition + 1}` : ''}`}</Badge>
                   ) : isActive ? (
-                    <span>{state.paused ? 'Press to resume' : 'Press to end turn'}</span>
+                    <span
+                      key={needsPass ? passReminder : undefined}
+                      className={needsPass ? `last-pass-hint${passReminder ? ' pass-reminder' : ''}` : undefined}
+                      aria-live={needsPass ? 'polite' : undefined}
+                    >
+                      {state.paused ? 'Press to resume' : needsPass ? 'Press the pass button to end the round' : 'Press to end turn'}
+                    </span>
                   ) : origIdx === nextIdx ? (
                     <span>Next</span>
                   ) : null}
@@ -1129,7 +1142,8 @@ function GamePage({ soundEnabled }) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="btn-pass"
+                    key={needsPass ? passReminder : undefined}
+                    className={`btn-pass${needsPass && passReminder ? ' pass-reminder' : ''}`}
                     onClick={(e) => { e.stopPropagation(); pass(origIdx); }}
                   >
                     Pass
