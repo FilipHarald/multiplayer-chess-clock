@@ -880,7 +880,7 @@ function GamePage({ soundEnabled }) {
                     <div key={pIdx} className={`upcoming-item${isPending ? ' queued-item' : ''}`}>
                       <span className="upcoming-pos">{pos + 1}.</span>
                       <div className="player-dot" style={{ background: state.players[pIdx].color }} />
-                      <span className="upcoming-name">{state.players[pIdx].name}{isPending ? ' (queued)' : ''}</span>
+                      <span className="upcoming-name">{state.players[pIdx].name}{isPending ? ' (pass queued)' : ''}</span>
                     </div>
                   );
                 })}
@@ -896,7 +896,7 @@ function GamePage({ soundEnabled }) {
                     <div key={pIdx} className="upcoming-item passed-item">
                       <span className="upcoming-pos">{passPos !== -1 ? (passPos + 1) + '.' : '~'}</span>
                       <div className="player-dot" style={{ background: state.players[pIdx].color }} />
-                      <span className="upcoming-name">{state.players[pIdx].name}{isPending ? ' (queued)' : ''}</span>
+                      <span className="upcoming-name">{state.players[pIdx].name}{isPending ? ' (pass queued)' : ''}</span>
                       <Button
                         variant="success" size="sm"
                         onClick={() => unpass(pIdx)}
@@ -964,6 +964,8 @@ function GamePage({ soundEnabled }) {
           const isOT = overtime[origIdx] ?? p.overtime;
           const isLow = timer < 30000 && timer > 0 && !isOT;
           const canAct = state.phase === 'playing' && !hasPassed && !state.paused;
+          const canPressCard = isActive && state.phase === 'playing';
+          const handleCardPress = state.paused ? togglePause : endTurn;
 
           let cardClass = 'player-card';
           if (isActive) cardClass += ' active';
@@ -976,7 +978,17 @@ function GamePage({ soundEnabled }) {
               key={origIdx}
               className={cardClass}
               style={{ '--player-color': p.color }}
-              onClick={isActive && state.phase === 'playing' && !state.paused ? endTurn : undefined}
+              onClick={canPressCard ? handleCardPress : undefined}
+              onKeyDown={canPressCard ? (e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleCardPress();
+                }
+              } : undefined}
+              role={canPressCard ? 'button' : undefined}
+              tabIndex={canPressCard ? 0 : undefined}
+              aria-label={canPressCard ? `${p.name}: ${state.paused ? 'resume' : 'end turn'}` : undefined}
             >
               <div className="player-info">
                 {editingPlayer === origIdx ? (
@@ -1015,31 +1027,22 @@ function GamePage({ soundEnabled }) {
                     </Button>
                   </div>
                 )}
-                <div className="player-status">
-                  {hasPassed ? (
-                    <Badge variant="secondary">Passed{passPosition !== -1 ? ` #${passPosition + 1}` : ''}{isPending ? ' (queued)' : ''}</Badge>
-                  ) : isOT ? (
-                    <Badge variant="outline" className="overtime-badge">Overtime</Badge>
-                  ) : isActive ? (
-                    <span style={{ color: p.color }}>Active</span>
-                  ) : (
-                    <span>Waiting</span>
-                  )}
-                </div>
+                {isOT && <Badge variant="outline" className="overtime-badge">Overtime</Badge>}
               </div>
-              <div className={`player-timer ${isLow ? 'low' : ''} ${isOT ? 'overtime' : ''}`}>{formatTime(timer)}</div>
-              {state.paused && isActive && (
+              <div className="player-clock">
+                <div className={`player-timer ${isLow ? 'low' : ''} ${isOT ? 'overtime' : ''}`}>{formatTime(timer)}</div>
+                {(hasPassed || isActive) && (
+                  <div className="player-status">
+                    {hasPassed ? (
+                      <Badge variant="secondary">{isPending ? 'Pass queued' : `Passed${passPosition !== -1 ? ` #${passPosition + 1}` : ''}`}</Badge>
+                    ) : (
+                      <span style={{ color: p.color }}>{state.paused ? 'Press to resume' : 'Press to end turn'}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              {canAct && !isActive && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="success" size="sm" onClick={togglePause}>
-                    <Play className="size-4" />Resume
-                  </Button>
-                </div>
-              )}
-              {canAct && (
-                <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-                  {isActive && (
-                    <Button size="sm" onClick={endTurn}>End Turn</Button>
-                  )}
                   <Button variant="outline" size="sm" onClick={() => pass(origIdx)}>Pass</Button>
                 </div>
               )}
