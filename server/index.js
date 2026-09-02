@@ -641,6 +641,11 @@ io.on('connection', (socket) => {
       room.devices.splice(devIdx, 1);
     }
 
+    if (room.devices.length === 0 && room.phase === 'playing' && !room.paused) {
+      room.paused = true;
+      room.pausedBy = 'disconnect';
+    }
+
     persistRoom(currentRoom);
     io.to(currentRoom).emit('device-left', { state: serializeState(room) });
 
