@@ -743,6 +743,11 @@ function GamePage() {
   }
 
   const activeIdx = state.activePlayerIndex;
+  const pauseReason = state.pausedBy === 'disconnect'
+    ? ' (no connected devices -> auto-paused)'
+    : state.pausedBy && state.pausedBy !== 'round-start' && state.pausedBy !== 'manual'
+      ? ` ("${state.pausedBy}" paused the game)`
+      : '';
 
   const upcomingInRound = state.turnOrder.slice(state.currentTurnIndex + 1);
   const upcomingFromStart = state.turnOrder.slice(0, state.currentTurnIndex);
@@ -820,7 +825,7 @@ function GamePage() {
               className="btn-pause w-full"
             >
               {state.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
-              {state.paused ? 'Resume' : 'Pause'}
+              {state.paused ? `Resume${pauseReason}` : 'Pause'}
             </Button>
           </div>
         )}
@@ -891,7 +896,7 @@ function GamePage() {
               {state.paused && isActive && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                   <Button variant="success" size="sm" onClick={togglePause}>
-                    <Play className="size-4" />Resume
+                    <Play className="size-4" />{`Resume${pauseReason}`}
                   </Button>
                 </div>
               )}

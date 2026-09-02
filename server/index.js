@@ -555,7 +555,8 @@ io.on('connection', (socket) => {
     if (!room || room.phase !== 'playing') return;
 
     room.paused = !room.paused;
-    room.pausedBy = room.paused ? 'manual' : null;
+    const device = room.devices.find(d => d.socketId === socket.id);
+    room.pausedBy = room.paused ? device?.name || null : null;
 
     if (!room.paused) startTimerTick(currentRoom);
 
