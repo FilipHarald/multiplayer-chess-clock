@@ -131,8 +131,12 @@ function copyToClipboard(text) {
 function formatTime(ms) {
   const sign = ms < 0 ? '-' : '';
   const totalSec = Math.ceil(Math.abs(ms) / 1000);
-  const min = Math.floor(totalSec / 60);
+  const hours = Math.floor(totalSec / 3600);
+  const min = Math.floor(totalSec / 60) % 60;
   const sec = totalSec % 60;
+  if (hours > 0) {
+    return `${sign}${hours}:${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  }
   return `${sign}${min}:${sec.toString().padStart(2, '0')}`;
 }
 
@@ -291,7 +295,7 @@ function AppHeader({ soundEnabled, onSoundToggle }) {
   return (
     <header className="app-header">
       {location.pathname !== '/' && (
-        <Button variant="secondary" size="icon" onClick={() => navigate('/')} aria-label="Home" title="Home">
+        <Button variant="ghost" size="icon" className="home-link" onClick={() => navigate('/')} aria-label="Home" title="Home">
           <img className="home-mark" src="/favicon.svg" alt="" />
         </Button>
       )}
@@ -392,15 +396,17 @@ function HomePage() {
               {knownRooms.map(room => (
                 <Card key={room.code} className="public-room-item" onClick={() => navigate(`/room/${room.code}`)}>
                   <div className="public-room-code">{room.code}</div>
-                  <div className="public-room-meta">
+                  <div className="public-room-counts">
                     <span className="room-count" title={`${room.playerCount} player${room.playerCount !== 1 ? 's' : ''}`}>
                       <UserRound /> {room.playerCount}
                     </span>
                     <span className="room-count" title={`${room.deviceCount} connected device${room.deviceCount !== 1 ? 's' : ''}`}>
                       <MonitorSmartphone /> {room.deviceCount}
                     </span>
-                    <Badge variant="secondary" className="public-room-phase">{room.phase === 'lobby' ? 'Lobby' : 'Playing'}</Badge>
                   </div>
+                    <Badge variant="secondary" className="public-room-phase">
+                      {room.phase === 'lobby' ? 'Lobby' : room.phase === 'playing' ? 'Playing' : 'Between rounds'}
+                    </Badge>
                 </Card>
               ))}
             </div>
@@ -543,6 +549,7 @@ function NewRoom() {
   }
 
   const minutesPerPlayer = state.minutesPerPlayer || 60;
+  const isCountUp = state.settings?.timerMode === 'count-up';
   const deviceCount = state.devices?.length || 0;
 
   return (
@@ -569,7 +576,7 @@ function NewRoom() {
         </Collapsible>
 
         {/* Time info */}
-        <Card className="time-info">
+        <Card className={`time-info${isCountUp ? ' time-info-unlimited' : ''}`}>
           <div className="time-info-row">
             <span>Time per player:</span>
             <div className="time-edit-row">
@@ -577,6 +584,7 @@ function NewRoom() {
                 type="number"
                 className="time-info-input"
                 value={minutesPerPlayer}
+                disabled={isCountUp}
                 onChange={e => {
                   const val = parseInt(e.target.value, 10);
                   if (val >= 1 && val <= 999) {
@@ -586,19 +594,19 @@ function NewRoom() {
                 min={1}
                 max={999}
               />
-              <span>min</span>
+              <span>{isCountUp ? 'Not applicable' : 'min'}</span>
             </div>
           </div>
           <div className="time-info-row">
             <span>Total max time:</span>
-            <span>{(() => {
+            <span>{isCountUp ? 'Unlimited' : (() => {
               const total = state.players.length * minutesPerPlayer;
               return `${Math.floor(total / 60)}h ${total % 60}m`;
             })()}</span>
           </div>
           <div className="time-info-row">
             <span>Expected end time:</span>
-            <span>{(() => {
+            <span>{isCountUp ? 'Not applicable' : (() => {
               const totalMs = state.players.length * minutesPerPlayer * 60 * 1000;
               return new Date(Date.now() + totalMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             })()}</span>
@@ -612,25 +620,55 @@ function NewRoom() {
         {/* Settings - collapsible, default closed */}
         <Collapsible title="Settings">
               <div className="checkbox-group">
-                <label className="checkbox-label">
-                  <Checkbox
-                    checked={state.settings?.public ?? true}
-                    onCheckedChange={checked => socket.current?.emit('update-settings', { public: checked })}
-                  />
-                  List publicly (visible on home page)
-                </label>
-                <label className="checkbox-label muted-option" title="Only pass-order is supported for now">
-                  <Checkbox checked disabled />
-                  Allow users to pass
-                </label>
-                <label className="checkbox-label muted-option" title="Only pass-order is supported for now">
-                  <Checkbox checked disabled />
-                  Use pass-order
-                </label>
-                <label className="checkbox-label muted-option settings-select-row" title="Only countdown is supported for now">
-                  <Select disabled className="settings-dropdown" aria-label="Clock direction">
-                    <option>countdown</option>
+                <div className="settings-order-row">
+                  <label htmlFor="timer-mode">Timer mode</label>
+                  <Select
+                    id="timer-mode"
+                    className="settings-dropdown"
+                    value={state.settings?.timerMode || 'countdown'}
+                    onChange={e => socket.current?.emit('update-settings', { timerMode: e.target.value })}
+                  >
+                    <option value="countdown">Countdown</option>
+                    <option value="count-up">Count up</option>
                   </Select>
+                  <span className="settings-help" tabIndex={0} aria-label="Timer mode help">
+                    <CircleHelp aria-hidden="true" />
+                    <span role="tooltip">
+                      Countdown starts from the configured time. Count up starts at zero and has no time limit or overtime.
+                    </span>
+                  </span>
+                </div>
+                <div className="settings-order-row">
+                  <label htmlFor="order-mode">Turn order</label>
+                  <Select
+                    id="order-mode"
+                    className="settings-dropdown"
+                    value={state.settings?.orderMode || 'pass-order'}
+                    onChange={e => socket.current?.emit('update-settings', {
+                      orderMode: e.target.value,
+                      ...(e.target.value === 'normal' ? { allowPass: false } : {}),
+                    })}
+                  >
+                    <option value="pass-order">Pass order</option>
+                    <option value="normal">Normal</option>
+                  </Select>
+                  <span className="settings-help" tabIndex={0} aria-label="Turn order help">
+                    <CircleHelp aria-hidden="true" />
+                    <span role="tooltip">
+                      Normal keeps the same turn order every round. Pass order makes each round's passing order the next round's turn order.
+                    </span>
+                  </span>
+                </div>
+                <label
+                  className={`checkbox-label${state.settings?.orderMode === 'pass-order' ? ' muted-option' : ''}`}
+                  title={state.settings?.orderMode === 'pass-order' ? 'Passing is required in Pass order mode' : undefined}
+                >
+                  <Checkbox
+                    checked={state.settings?.orderMode === 'pass-order' || state.settings?.allowPass === true}
+                    disabled={state.settings?.orderMode === 'pass-order'}
+                    onCheckedChange={checked => socket.current?.emit('update-settings', { allowPass: checked })}
+                  />
+                  Allow users to pass
                 </label>
               </div>
         </Collapsible>
@@ -906,6 +944,8 @@ function GamePage({ soundEnabled }) {
   // provisional until their turn slot arrives, but should be visually
   // indicated immediately so the UI reflects what happened.
   const allPassed = [...state.passOrder, ...state.pendingPass];
+  const canPass = state.settings?.orderMode === 'pass-order' || state.settings?.allowPass === true;
+  const isCountUp = state.settings?.timerMode === 'count-up';
 
   return (
     <div className="app">
@@ -922,7 +962,7 @@ function GamePage({ soundEnabled }) {
           ))}
         </div>
 
-        {state.phase === 'playing' && (upcomingRemaining.length > 0 || allPassed.length > 0) && (
+        {state.phase === 'playing' && (upcomingRemaining.length > 0 || (canPass && allPassed.length > 0)) && (
           <div className="upcoming-order">
             {upcomingRemaining.length > 0 && (
               <>
@@ -939,7 +979,7 @@ function GamePage({ soundEnabled }) {
                 })}
               </>
             )}
-            {allPassed.length > 0 && (
+            {canPass && allPassed.length > 0 && (
               <>
                 <div className="upcoming-divider">Passed</div>
                 {allPassed.map((pIdx) => {
@@ -1014,9 +1054,9 @@ function GamePage({ soundEnabled }) {
           const isPending = state.pendingPass.includes(origIdx);
           const notificationsEnabled = subscriptions.includes(origIdx);
           const timer = timers[origIdx] ?? p.timerMs;
-          const isOT = overtime[origIdx] ?? p.overtime;
-          const isLow = timer < 30000 && timer > 0 && !isOT;
-          const canAct = state.phase === 'playing' && !hasPassed && !state.paused;
+          const isOT = !isCountUp && (overtime[origIdx] ?? p.overtime);
+          const isLow = !isCountUp && timer < 30000 && timer > 0 && !isOT;
+          const canAct = canPass && state.phase === 'playing' && !hasPassed && !state.paused;
           const canPressCard = isActive && state.phase === 'playing';
           const handleCardPress = state.paused ? togglePause : endTurn;
 
@@ -1193,6 +1233,7 @@ function GameOverPage() {
     const dragIdx = dragIndexRef.current;
     setDragTarget(null);
     if (dragIdx === null || dragIdx === dropIdx) return;
+    if (state.settings?.orderMode !== 'pass-order') return;
     const newOrder = [...state.passOrder];
     const [moved] = newOrder.splice(dragIdx, 1);
     newOrder.splice(dropIdx, 0, moved);
@@ -1203,8 +1244,12 @@ function GameOverPage() {
     return <div className="app"><p style={{ textAlign: 'center', padding: '40px' }}>Loading...</p></div>;
   }
 
+  const isPassOrder = state.settings?.orderMode !== 'normal';
+  const nextRoundOrder = isPassOrder ? state.passOrder : state.waitingOrder;
   const winner = isRoundOver ? null : state.players[state.activePlayerIndex];
-  const loser = isRoundOver ? null : state.players.find((p, i) => p.timerMs <= 0);
+  const loser = isRoundOver || state.settings?.timerMode === 'count-up'
+    ? null
+    : state.players.find(p => p.timerMs <= 0);
 
   return (
     <div className="app">
@@ -1220,26 +1265,28 @@ function GameOverPage() {
         {isRoundOver && (
           <>
             <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-              Everyone passed — next round runs in pass order:
+              {isPassOrder
+                ? 'Everyone passed. The next round runs in pass order:'
+                : 'Everyone passed. The next round keeps the normal turn order:'}
             </p>
             <div className="player-list" style={{ width: '100%' }} onDragLeave={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget)) setDragTarget(null);
             }}>
-              {state.passOrder.map((pIdx, pos) => {
+              {nextRoundOrder.map((pIdx, pos) => {
                 const p = state.players[pIdx];
                 return (
                   <div
                     key={pIdx}
                     className="drag-zone"
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, pos)}
-                    onDragEnd={handleDragEnd}
-                    onDragEnter={(e) => handleDragEnter(e, pos)}
-                    onDragOver={(e) => handleDragOver(e, pos)}
-                    onDrop={(e) => handleDrop(e, pos)}
+                    draggable={isPassOrder}
+                    onDragStart={isPassOrder ? (e) => handleDragStart(e, pos) : undefined}
+                    onDragEnd={isPassOrder ? handleDragEnd : undefined}
+                    onDragEnter={isPassOrder ? (e) => handleDragEnter(e, pos) : undefined}
+                    onDragOver={isPassOrder ? (e) => handleDragOver(e, pos) : undefined}
+                    onDrop={isPassOrder ? (e) => handleDrop(e, pos) : undefined}
                   >
                     <Card className={`player-slot connected${dragTarget === pos ? ' drag-target' : ''}`}>
-                      <DragHandle />
+                      {isPassOrder && <DragHandle />}
                       <span style={{ fontFamily: 'monospace', opacity: 0.6 }}>{pos + 1}.</span>
                       <div className="player-dot" style={{ background: p.color }} />
                       <span>{p.name}</span>

@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
 
 // ---------- SQLite persistence ----------
 
-const db = new Database(join(__dirname, 'chess-clock.db'));
+const db = new Database(process.env.CHESS_CLOCK_DB_PATH || join(__dirname, 'chess-clock.db'));
 db.pragma('journal_mode = WAL');
 db.exec(`
   CREATE TABLE IF NOT EXISTS rooms (
@@ -42,6 +42,13 @@ function loadRooms() {
       // arrays exist.
       room.passOrder ??= [];
       room.pendingPass ??= [];
+      room.settings ??= {};
+      room.settings.public ??= true;
+      room.settings.timerMode = room.settings.timerMode === 'count-up' ? 'count-up' : 'countdown';
+      room.settings.orderMode = room.settings.orderMode === 'normal' ? 'normal' : 'pass-order';
+      room.settings.allowPass = room.settings.orderMode === 'pass-order'
+        ? true
+        : room.settings.allowPass === true;
       loaded.push(room);
     } catch { /* skip corrupt row */ }
   }
@@ -119,6 +126,9 @@ function createRoom(minutesPerPlayer, settings = {}) {
     createdAt: Date.now(),
     settings: {
       public: settings.public ?? true,
+      timerMode: settings.timerMode === 'count-up' ? 'count-up' : 'countdown',
+      orderMode: settings.orderMode === 'normal' ? 'normal' : 'pass-order',
+      allowPass: settings.orderMode === 'normal' && settings.allowPass === true,
     },
   };
 
@@ -143,15 +153,14 @@ function startTimerTick(code) {
     const player = room.players[activeIdx];
     if (!player) return;
 
-    // Clocks always count upward from 0. The display runs down from the room's
-    // limit and goes negative in overtime; a player whose elapsed passes the
-    // limit is flagged overtime and keeps counting (never eliminated by time).
     player.elapsedMs += 100;
+
+    const countUp = room.settings.timerMode === 'count-up';
 
     io.to(code).emit('timer-tick', {
       activePlayerIndex: activeIdx,
-      timers: room.players.map((p) => room.limitMs - p.elapsedMs),
-      overtime: room.players.map((p) => p.elapsedMs >= room.limitMs),
+      timers: room.players.map((p) => countUp ? p.elapsedMs : room.limitMs - p.elapsedMs),
+      overtime: room.players.map((p) => !countUp && p.elapsedMs >= room.limitMs),
     });
   }, 100);
 }
@@ -231,7 +240,9 @@ function startNextRound(code) {
   if (!room) return;
 
   room.round++;
-  room.turnOrder = [...room.passOrder];
+  room.turnOrder = room.settings.orderMode === 'normal'
+    ? [...room.waitingOrder]
+    : [...room.passOrder];
   room.currentTurnIndex = 0;
   room.passOrder = [];
   room.pendingPass = [];
@@ -245,6 +256,7 @@ function startNextRound(code) {
 }
 
 function serializeState(room) {
+  const countUp = room.settings.timerMode === 'count-up';
   return {
     code: room.code,
     createdAt: room.createdAt,
@@ -253,8 +265,8 @@ function serializeState(room) {
       name: p.name,
       color: p.color,
       elapsedMs: p.elapsedMs,
-      timerMs: room.limitMs - p.elapsedMs,
-      overtime: p.elapsedMs >= room.limitMs,
+      timerMs: countUp ? p.elapsedMs : room.limitMs - p.elapsedMs,
+      overtime: !countUp && p.elapsedMs >= room.limitMs,
     })),
     devices: room.devices.map(d => ({ id: d.deviceId, name: d.name })),
     waitingOrder: room.waitingOrder,
@@ -299,7 +311,7 @@ io.on('connection', (socket) => {
     cb({ rooms: metadata });
   });
 
-  socket.on('create-room', ({ minutesPerPlayer, settings, name, deviceId }, cb) => {
+  socket.on('create-room', ({ minutesPerPlayer, settings, name, deviceId } = {}, cb) => {
     const room = createRoom(minutesPerPlayer || 60, settings);
     if (currentRoom && currentRoom !== room.code) socket.leave(currentRoom);
     socket.join(room.code);
@@ -311,7 +323,8 @@ io.on('connection', (socket) => {
     cb({ state: serializeState(room) });
   });
 
-  socket.on('join-room', ({ code, name, deviceId }, cb) => {
+  socket.on('join-room', ({ code, name, deviceId } = {}, cb) => {
+    if (typeof cb !== 'function') return;
     const room = rooms.get(code);
     if (!room) return cb({ error: 'Room not found' });
     if (currentRoom && currentRoom !== room.code) socket.leave(currentRoom);
@@ -336,7 +349,7 @@ io.on('connection', (socket) => {
     cb({ state: serializeState(room) });
   });
 
-  socket.on('set-device-name', ({ name }) => {
+  socket.on('set-device-name', ({ name } = {}) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room) return;
@@ -348,7 +361,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('rename-player', ({ index, name }) => {
+  socket.on('rename-player', ({ index, name } = {}) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room) return;
@@ -359,7 +372,7 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
-  socket.on('set-color', ({ index, color }) => {
+  socket.on('set-color', ({ index, color } = {}) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room) return;
@@ -395,7 +408,7 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
-  socket.on('remove-player', ({ index }) => {
+  socket.on('remove-player', ({ index } = {}) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room) return;
@@ -412,7 +425,7 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
-  socket.on('reorder-players', ({ order }) => {
+  socket.on('reorder-players', ({ order } = {}) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room || (room.phase !== 'lobby' && room.phase !== 'round-over')) return;
@@ -429,6 +442,7 @@ io.on('connection', (socket) => {
     if (new Set(order).size !== order.length) return;
 
     if (room.phase === 'round-over') {
+      if (room.settings.orderMode !== 'pass-order') return;
       room.passOrder = order;
     } else {
       room.waitingOrder = order;
@@ -481,6 +495,7 @@ io.on('connection', (socket) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room || room.phase !== 'playing') return;
+    if (room.settings.orderMode !== 'pass-order' && !room.settings.allowPass) return;
 
     // Any device may pass for any player
     const targetIdx = Number.isInteger(index) ? index : 0;
@@ -527,10 +542,11 @@ io.on('connection', (socket) => {
     checkRoundOver(currentRoom);
   });
 
-  socket.on('unpass', ({ index }) => {
+  socket.on('unpass', ({ index } = {}) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room || room.phase !== 'playing') return;
+    if (room.settings.orderMode !== 'pass-order' && !room.settings.allowPass) return;
 
     const targetIdx = Number.isInteger(index) ? index : 0;
 
@@ -590,25 +606,38 @@ io.on('connection', (socket) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room) return;
-    if (room.phase !== 'lobby' && room.phase !== 'playing') return;
+    if (room.phase !== 'lobby') return;
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return;
 
     // Any device can change settings
-    const allowed = ['public'];
-    for (const key of allowed) {
-      if (typeof settings[key] === 'boolean') {
-        room.settings[key] = settings[key];
+    if (typeof settings.public === 'boolean') {
+      room.settings.public = settings.public;
+    }
+    if (settings.orderMode === 'normal' || settings.orderMode === 'pass-order') {
+      room.settings.orderMode = settings.orderMode;
+    }
+    if (settings.timerMode === 'countdown' || settings.timerMode === 'count-up') {
+      if (room.settings.timerMode !== settings.timerMode) {
+        room.settings.timerMode = settings.timerMode;
+        for (const player of room.players) player.elapsedMs = 0;
       }
+    }
+    if (room.settings.orderMode === 'pass-order') {
+      room.settings.allowPass = true;
+    } else if (typeof settings.allowPass === 'boolean') {
+      room.settings.allowPass = settings.allowPass;
     }
 
     persistRoom(currentRoom);
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
-  socket.on('update-time', ({ minutesPerPlayer }) => {
+  socket.on('update-time', ({ minutesPerPlayer } = {}) => {
     if (currentRoom === null) return;
     const room = rooms.get(currentRoom);
     if (!room) return;
     if (room.phase !== 'lobby') return;
+    if (room.settings.timerMode !== 'countdown') return;
     if (typeof minutesPerPlayer !== 'number' || minutesPerPlayer < 1 || minutesPerPlayer > 999) return;
 
     room.minutesPerPlayer = minutesPerPlayer;
@@ -621,15 +650,19 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('state-update', { state: serializeState(room) });
   });
 
-  socket.on('reset-game', ({ playerCount, minutesPerPlayer }) => {
+  socket.on('reset-game', ({ playerCount, minutesPerPlayer } = {}) => {
     if (currentRoom === null) return;
     stopTimerTick(currentRoom);
 
     const room = rooms.get(currentRoom);
     if (!room) return;
 
-    const count = playerCount || room.players.length;
-    const minutes = minutesPerPlayer || room.minutesPerPlayer || room.limitMs / 60000 || 60;
+    const count = playerCount === undefined ? room.players.length : playerCount;
+    const minutes = minutesPerPlayer === undefined
+      ? room.minutesPerPlayer || room.limitMs / 60000 || 60
+      : minutesPerPlayer;
+    if (!Number.isInteger(count) || count < 2 || count > 10) return;
+    if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes < 1 || minutes > 999) return;
     room.minutesPerPlayer = minutes;
     room.limitMs = minutes * 60 * 1000;
 

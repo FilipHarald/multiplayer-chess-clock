@@ -8,7 +8,7 @@ A multiplayer chess clock web app with a pass-based turn order mechanic.
 - Share the room link (with QR code) for others to join
 - Players take turns — only the active player's clock ticks
 - When a player presses **Pass**, they're removed from the current round
-- The order players pass determines the turn order in the next round
+- Choose Normal order to keep the same turn order each round, or Pass order to make passing determine the next round's order
 - Last player standing wins the round
 - Game continues until a player runs out of time
 
