@@ -10,7 +10,7 @@ import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
 import { Dialog, DialogClose, DialogTitle } from './components/ui/dialog';
-import { Bell, BellOff, Check, ChevronDown, CircleHelp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX, X } from 'lucide-react';
+import { Bell, BellOff, ChevronDown, CircleHelp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX, X } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
@@ -507,9 +507,9 @@ function NewRoom() {
               <div className="share-section">
                 <div className="share-link-row" onClick={handleCopyLink}>
                   <span className="share-link-text">{shareLink}</span>
-                  <Copy className="copy-glyph" aria-label="Copy link" />
                   {copyState === 'copied' && <span className="copy-feedback copied">Copied!</span>}
                   {copyState === 'failed' && <span className="copy-feedback failed">Failed</span>}
+                  <Copy className="copy-glyph" aria-label="Copy link" />
                 </div>
                 <div className="qr-code">
                   <QRCodeSVG value={shareLink} size={128} bgColor="#16213e" fgColor="#eee" />
@@ -679,14 +679,14 @@ function GameTopBar({ code, round }) {
         <Badge variant="outline">Round {round}</Badge>
       </div>
       <div className="topbar-actions">
-        <Button variant="ghost" size="icon" onClick={handleCopyLink} title="Copy room link" aria-label="Copy room link">
-          {copyState === 'copied' ? <Check className="size-4" /> : <Link className="size-4" />}
-        </Button>
         {copyState !== 'idle' && (
           <span className={`copy-feedback ${copyState}`} role="status">
             {copyState === 'copied' ? 'Copied!' : 'Failed'}
           </span>
         )}
+        <Button variant="ghost" size="icon" onClick={handleCopyLink} title="Copy room link" aria-label="Copy room link">
+          <Link className="size-4" />
+        </Button>
         <Dialog
           open={qrOpen}
           onOpenChange={setQrOpen}
