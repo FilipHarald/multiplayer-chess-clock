@@ -16,7 +16,7 @@
 *{box-sizing:border-box} html{background:var(--background)}
 body{min-width:320px;min-height:100vh;margin:0;background:#1a1a2e;color:var(--foreground);font-family:Inter,ui-sans-serif,system-ui,sans-serif}#root{min-height:100vh;display:flex;flex-direction:column}.app-content{display:flex;flex:1}.app-content>.app{min-height:100%}
 button,input,select{font:inherit}
-.app-header{width:min(100%,36rem);min-height:3.5rem;margin-inline:auto;padding:.75rem 1rem 0;display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+.app-header{width:min(100%,36rem);min-height:3.5rem;margin-inline:auto;padding:.75rem 1rem 0;display:flex;align-items:center;justify-content:space-between;gap:.75rem}.home-mark{width:1.75rem;height:1.75rem;display:block}
 .name-bar{margin-left:auto;min-width:0;font-size:.8rem}.name-bar-display{color:var(--muted-foreground);cursor:pointer;white-space:nowrap}.name-bar-display:hover{color:var(--foreground)}.preference-toggle.enabled{background:color-mix(in srgb,var(--primary) 16%,transparent);color:var(--primary)}
 .name-bar-edit{display:flex;align-items:center;gap:.5rem;color:var(--muted-foreground)}.name-bar-edit input{width:8rem;height:2.25rem}
 .app{width:min(100%,36rem);margin-inline:auto;padding:1rem}

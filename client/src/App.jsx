@@ -263,7 +263,9 @@ function AppHeader({ soundEnabled, onSoundToggle }) {
   return (
     <header className="app-header">
       {location.pathname !== '/' && (
-        <Button variant="secondary" size="sm" onClick={() => navigate('/')}>Home</Button>
+        <Button variant="secondary" size="icon" onClick={() => navigate('/')} aria-label="Home" title="Home">
+          <img className="home-mark" src="/favicon.svg" alt="" />
+        </Button>
       )}
       <DeviceNameBar />
       <Button
