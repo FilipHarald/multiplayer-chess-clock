@@ -10,7 +10,7 @@ import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
 import { Dialog, DialogClose, DialogTitle } from './components/ui/dialog';
-import { Bell, BellOff, ChevronDown, CircleHelp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX, X } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronDown, CircleHelp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX, X } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
