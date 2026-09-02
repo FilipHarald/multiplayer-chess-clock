@@ -9,7 +9,8 @@ import { Card } from './components/ui/card';
 import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
-import { Bell, BellOff, Check, ChevronDown, ChevronUp, CircleHelp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX } from 'lucide-react';
+import { Dialog, DialogClose, DialogTitle } from './components/ui/dialog';
+import { Bell, BellOff, Check, ChevronDown, CircleHelp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX, X } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
@@ -686,17 +687,29 @@ function GameTopBar({ code, round }) {
             {copyState === 'copied' ? 'Copied!' : 'Failed'}
           </span>
         )}
-        <Button variant="ghost" size="icon" onClick={() => setQrOpen(o => !o)} title="Show QR code" aria-label="Show QR code">
-          <QrCode className="size-4" />
-          {qrOpen ? <ChevronUp className="topbar-qr-caret" /> : null}
-        </Button>
+        <Dialog
+          open={qrOpen}
+          onOpenChange={setQrOpen}
+          trigger={
+            <Button variant="ghost" size="icon" title="Show QR code" aria-label="Show QR code">
+              <QrCode className="size-4" />
+            </Button>
+          }
+          title={
+            <div className="qr-dialog-header">
+              <DialogTitle className="qr-dialog-title">Scan to join</DialogTitle>
+              <DialogClose render={<Button variant="ghost" size="icon" aria-label="Close QR code" />}>
+                <X className="size-4" />
+              </DialogClose>
+            </div>
+          }
+          className="qr-dialog"
+        >
+          <div className="qr-dialog-code">
+            <QRCodeSVG value={shareLink} size={256} bgColor="#16213e" fgColor="#eee" />
+          </div>
+        </Dialog>
       </div>
-      {qrOpen && (
-        <button className="topbar-qr" type="button" onClick={() => setQrOpen(false)} aria-label="Hide QR code">
-          <QRCodeSVG value={shareLink} size={128} bgColor="#16213e" fgColor="#eee" />
-          <ChevronUp className="topbar-qr-caret collapse-hint" />
-        </button>
-      )}
     </div>
   );
 }
