@@ -9,12 +9,52 @@ import { Card } from './components/ui/card';
 import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
-import { Check, ChevronDown, ChevronUp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2 } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronDown, ChevronUp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
   ? 'http://localhost:3002'
   : window.location.origin;
+const SOUND_ENABLED_KEY = 'mcc-sound-enabled';
+
+function getSoundEnabled() {
+  return localStorage.getItem(SOUND_ENABLED_KEY) !== 'false';
+}
+
+function getNotificationKey(code) {
+  return `mcc-player-notifications:${code.toUpperCase()}`;
+}
+
+function getPlayerNotifications(code) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(getNotificationKey(code)) || '[]');
+    return Array.isArray(stored) ? stored.filter(Number.isInteger) : [];
+  } catch {
+    return [];
+  }
+}
+
+let audioContext = null;
+function playTurnSound() {
+  try {
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().then(playTurnSound).catch(() => {});
+      return;
+    }
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, audioContext.currentTime);
+    osc.frequency.setValueAtTime(1100, audioContext.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+    osc.start(audioContext.currentTime);
+    osc.stop(audioContext.currentTime + 0.3);
+  } catch { /* Audio may be unavailable or blocked until a user gesture. */ }
+}
 
 function getDeviceId() {
   let id = localStorage.getItem('mcc-device-id');
@@ -216,7 +256,7 @@ function DeviceNameBar() {
   );
 }
 
-function AppHeader() {
+function AppHeader({ soundEnabled, onSoundToggle }) {
   const location = useLocation();
   const navigate = useNavigate();
   return (
@@ -225,6 +265,17 @@ function AppHeader() {
         <Button variant="secondary" size="sm" onClick={() => navigate('/')}>Home</Button>
       )}
       <DeviceNameBar />
+      <Button
+        variant="ghost"
+        size="icon"
+        className={soundEnabled ? 'preference-toggle enabled' : 'preference-toggle'}
+        onClick={onSoundToggle}
+        aria-label={soundEnabled ? 'Disable notification sound' : 'Enable notification sound'}
+        aria-pressed={soundEnabled}
+        title={soundEnabled ? 'Notification sound enabled' : 'Notification sound disabled'}
+      >
+        {soundEnabled ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+      </Button>
     </header>
   );
 }
@@ -650,7 +701,7 @@ function GameTopBar({ code, round }) {
   );
 }
 
-function GamePage() {
+function GamePage({ soundEnabled }) {
   const { socket, connected } = useSocket();
   const { code } = useParams();
   const navigate = useNavigate();
@@ -660,8 +711,14 @@ function GamePage() {
   const joinedRef = useRef(false);
   const deviceName = getDeviceName();
   const prevActiveRef = useRef(null);
+  const soundEnabledRef = useRef(soundEnabled);
+  const [subscriptions, setSubscriptions] = useState(() => getPlayerNotifications(code));
+  const subscriptionsRef = useRef(subscriptions);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editName, setEditName] = useState('');
+
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+  useEffect(() => { subscriptionsRef.current = subscriptions; }, [subscriptions]);
 
   useEffect(() => {
     const s = socket.current;
@@ -683,10 +740,18 @@ function GamePage() {
     if (!s) return;
 
     const updateFromState = (newState) => {
+      const nextActive = newState.activePlayerIndex;
+      if (
+        nextActive !== prevActiveRef.current
+        && subscriptionsRef.current.includes(nextActive)
+        && soundEnabledRef.current
+      ) {
+        playTurnSound();
+      }
       setState(newState);
       setTimers(newState.players.map(p => p.timerMs));
       setOvertime(newState.players.map(p => p.overtime));
-      prevActiveRef.current = newState.activePlayerIndex;
+      prevActiveRef.current = nextActive;
     };
 
     s.on('state-update', ({ state: s }) => updateFromState(s));
@@ -727,6 +792,16 @@ function GamePage() {
   const pass = useCallback((index) => socket.current?.emit('pass', { index }), [socket]);
   const unpass = useCallback((index) => socket.current?.emit('unpass', { index }), [socket]);
   const togglePause = useCallback(() => socket.current?.emit('toggle-pause'), [socket]);
+  const togglePlayerNotification = useCallback((index) => {
+    setSubscriptions(current => {
+      const next = current.includes(index)
+        ? current.filter(i => i !== index)
+        : [...current, index];
+      localStorage.setItem(getNotificationKey(code), JSON.stringify(next));
+      subscriptionsRef.current = next;
+      return next;
+    });
+  }, [code]);
 
   const handleStartEdit = useCallback((pIdx) => {
     setEditingPlayer(pIdx);
@@ -835,6 +910,7 @@ function GamePage() {
           const hasPassed = allPassed.includes(origIdx);
           const passPosition = state.passOrder.indexOf(origIdx);
           const isPending = state.pendingPass.includes(origIdx);
+          const notificationsEnabled = subscriptions.includes(origIdx);
           const timer = timers[origIdx] ?? p.timerMs;
           const isOT = overtime[origIdx] ?? p.overtime;
           const isLow = timer < 30000 && timer > 0 && !isOT;
@@ -871,6 +947,16 @@ function GamePage() {
                 ) : (
                   <div className="player-name-row">
                     <div className="player-name" style={{ color: p.color }}>{p.name}</div>
+                    <Button
+                      variant="ghost" size="icon"
+                      className={notificationsEnabled ? 'preference-toggle enabled' : 'preference-toggle'}
+                      title={notificationsEnabled ? `Notifications enabled for ${p.name}` : `Notifications disabled for ${p.name}`}
+                      aria-label={notificationsEnabled ? `Disable notifications for ${p.name}` : `Enable notifications for ${p.name}`}
+                      aria-pressed={notificationsEnabled}
+                      onClick={(e) => { e.stopPropagation(); togglePlayerNotification(origIdx); }}
+                    >
+                      {notificationsEnabled ? <Bell className="size-4" /> : <BellOff className="size-4" />}
+                    </Button>
                     <Button
                       variant="ghost" size="icon" className="btn-rename"
                       title="Rename player"
@@ -1078,14 +1164,25 @@ function GameOverPage() {
 // ---------- App ----------
 
 export default function App() {
+  const [soundEnabled, setSoundEnabled] = useState(getSoundEnabled);
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled(current => {
+      const next = !current;
+      localStorage.setItem(SOUND_ENABLED_KEY, String(next));
+      if (next) playTurnSound();
+      return next;
+    });
+  }, []);
+
   return (
     <BrowserRouter>
       <SocketProvider>
-        <AppHeader />
+        <AppHeader soundEnabled={soundEnabled} onSoundToggle={toggleSound} />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/room/:code" element={<NewRoom />} />
-          <Route path="/game/:code" element={<GamePage />} />
+          <Route path="/game/:code" element={<GamePage soundEnabled={soundEnabled} />} />
           <Route path="/gameover/:code" element={<GameOverPage />} />
         </Routes>
         <div className="version-footer">{__APP_VERSION__}</div>
