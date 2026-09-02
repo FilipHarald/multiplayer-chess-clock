@@ -848,6 +848,7 @@ function GamePage({ soundEnabled }) {
   const upcomingInRound = state.turnOrder.slice(state.currentTurnIndex + 1);
   const upcomingFromStart = state.turnOrder.slice(0, state.currentTurnIndex);
   const upcomingRemaining = [...upcomingInRound, ...upcomingFromStart];
+  const nextIdx = upcomingRemaining[0];
 
   // Merge confirmed + pending passes for display — pending passes are
   // provisional until their turn slot arrives, but should be visually
@@ -1026,6 +1027,8 @@ function GamePage({ soundEnabled }) {
                     <Badge variant="secondary">{isPending ? 'Pass queued' : `Passed${passPosition !== -1 ? ` #${passPosition + 1}` : ''}`}</Badge>
                   ) : isActive ? (
                     <span>{state.paused ? 'Press to resume' : 'Press to end turn'}</span>
+                  ) : origIdx === nextIdx ? (
+                    <span>Next</span>
                   ) : null}
                 </div>
               </div>
