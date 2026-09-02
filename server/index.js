@@ -689,6 +689,8 @@ io.on('connection', (socket) => {
 // Serve static client in production
 app.use(express.static(join(__dirname, '../client/dist')));
 
+app.get('/api/rooms', (req, res) => res.sendStatus(404));
+
 // SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '../client/dist/index.html'));
