@@ -9,7 +9,7 @@ import { Card } from './components/ui/card';
 import { Badge } from './components/ui/badge';
 import { Checkbox } from './components/ui/checkbox';
 import { Select } from './components/ui/select';
-import { Bell, BellOff, Check, ChevronDown, ChevronUp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronDown, ChevronUp, CircleHelp, Copy, Link, Pause, Pencil, Play, Plus, QrCode, Trash2, Volume2, VolumeX } from 'lucide-react';
 
 const isDev = window.location.port === '5173';
 const SOCKET_URL = isDev
@@ -716,9 +716,16 @@ function GamePage({ soundEnabled }) {
   const subscriptionsRef = useRef(subscriptions);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editName, setEditName] = useState('');
+  const [pauseReasonOpen, setPauseReasonOpen] = useState(false);
 
   useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
   useEffect(() => { subscriptionsRef.current = subscriptions; }, [subscriptions]);
+  useEffect(() => {
+    if (!pauseReasonOpen) return;
+    const closeReason = () => setPauseReasonOpen(false);
+    document.addEventListener('mousedown', closeReason);
+    return () => document.removeEventListener('mousedown', closeReason);
+  }, [pauseReasonOpen]);
 
   useEffect(() => {
     const s = socket.current;
@@ -742,7 +749,8 @@ function GamePage({ soundEnabled }) {
     const updateFromState = (newState) => {
       const nextActive = newState.activePlayerIndex;
       if (
-        nextActive !== prevActiveRef.current
+        prevActiveRef.current !== null
+        && nextActive !== prevActiveRef.current
         && subscriptionsRef.current.includes(nextActive)
         && soundEnabledRef.current
       ) {
@@ -819,9 +827,9 @@ function GamePage({ soundEnabled }) {
 
   const activeIdx = state.activePlayerIndex;
   const pauseReason = state.pausedBy === 'disconnect'
-    ? ' (no connected devices -> auto-paused)'
+    ? 'All devices disconnected, game auto-paused.'
     : state.pausedBy && state.pausedBy !== 'round-start' && state.pausedBy !== 'manual'
-      ? ` ("${state.pausedBy}" paused the game)`
+      ? `Device "${state.pausedBy}" paused the game.`
       : '';
 
   const upcomingInRound = state.turnOrder.slice(state.currentTurnIndex + 1);
@@ -893,15 +901,42 @@ function GamePage({ soundEnabled }) {
 
         {state.phase === 'playing' && (
           <div className="pause-control">
-            <Button
-              variant={state.paused ? 'success' : 'warning'}
-              size="sm"
-              onClick={togglePause}
-              className="btn-pause w-full"
-            >
-              {state.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
-              {state.paused ? `Resume${pauseReason}` : 'Pause'}
-            </Button>
+            <div className="pause-control-row">
+              <Button
+                variant={state.paused ? 'success' : 'warning'}
+                size="sm"
+                onClick={togglePause}
+                className="btn-pause w-full"
+              >
+                {state.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+                {state.paused ? 'Resume' : 'Pause'}
+              </Button>
+              {state.paused && pauseReason && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="pause-reason-toggle"
+                  aria-label="Show pause reason"
+                  aria-expanded={pauseReasonOpen}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPauseReasonOpen(open => !open);
+                  }}
+                >
+                  <CircleHelp className="size-4" />
+                </Button>
+              )}
+            </div>
+            {pauseReasonOpen && pauseReason && (
+              <button
+                type="button"
+                className="pause-reason"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => setPauseReasonOpen(false)}
+              >
+                {pauseReason}
+              </button>
+            )}
           </div>
         )}
 
@@ -982,7 +1017,7 @@ function GamePage({ soundEnabled }) {
               {state.paused && isActive && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                   <Button variant="success" size="sm" onClick={togglePause}>
-                    <Play className="size-4" />{`Resume${pauseReason}`}
+                    <Play className="size-4" />Resume
                   </Button>
                 </div>
               )}
