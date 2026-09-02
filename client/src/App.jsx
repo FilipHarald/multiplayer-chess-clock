@@ -1031,17 +1031,15 @@ function GamePage({ soundEnabled }) {
               </div>
               <div className="player-clock">
                 <div className={`player-timer ${isLow ? 'low' : ''} ${isOT ? 'overtime' : ''}`}>{formatTime(timer)}</div>
-                {(hasPassed || isActive) && (
-                  <div className="player-status">
-                    {hasPassed ? (
-                      <Badge variant="secondary">{isPending ? 'Pass queued' : `Passed${passPosition !== -1 ? ` #${passPosition + 1}` : ''}`}</Badge>
-                    ) : (
-                      <span style={{ color: p.color }}>{state.paused ? 'Press to resume' : 'Press to end turn'}</span>
-                    )}
-                  </div>
-                )}
+                <div className="player-status">
+                  {hasPassed ? (
+                    <Badge variant="secondary">{isPending ? 'Pass queued' : `Passed${passPosition !== -1 ? ` #${passPosition + 1}` : ''}`}</Badge>
+                  ) : isActive ? (
+                    <span>{state.paused ? 'Press to resume' : 'Press to end turn'}</span>
+                  ) : null}
+                </div>
               </div>
-              {canAct && !isActive && (
+              {canAct && (
                 <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                   <Button variant="outline" size="sm" onClick={() => pass(origIdx)}>Pass</Button>
                 </div>
