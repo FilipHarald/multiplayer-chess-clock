@@ -35,9 +35,3 @@ PORT=3002 node server/index.js
 
 Agents can follow [AGENT_BROWSER_GUIDE.md](AGENT_BROWSER_GUIDE.md) to verify
 reachability, create a room through Chromium, and capture screenshots.
-
-## Tech stack
-
-- **Backend:** Node.js, Express, Socket.IO
-- **Frontend:** React, Vite
-- **Styling:** Plain CSS
